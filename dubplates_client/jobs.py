@@ -8,7 +8,7 @@ import time
 import traceback
 from pathlib import Path
 
-from .engine import Cancelled, Engine, bind
+from .engine import Cancelled, Engine, bind, process_stem
 
 log = logging.getLogger("dubplates")
 AUDIO = (".wav", ".flac", ".mp3", ".ogg", ".m4a", ".aac", ".aif", ".aiff", ".opus", ".wma")
@@ -16,8 +16,9 @@ _ids = itertools.count(1)
 
 
 class Jobs:
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: Engine, library=None):
         self.eng = engine
+        self.lib = library                              # finished sets go into the user's library
         self.lock = threading.Lock()
         self.jobs: list[dict] = []
         self.cancels: dict[int, threading.Event] = {}
@@ -44,6 +45,18 @@ class Jobs:
             self.last_ids = ids
         self.wake.set()
         return n
+
+    def add_stem_work(self, folder: str, stem: str, model_file: str, model_name: str) -> int:
+        """More work on one stem of a set (see engine.process_stem)."""
+        with self.lock:
+            jid = next(_ids)
+            self.cancels[jid] = threading.Event()
+            self.jobs.append({"id": jid, "kind": "stem", "path": folder, "name": f"{Path(folder).name} › {stem}", "stem": stem,
+                              "model": model_file, "modelName": model_name, "state": "queued", "pct": 0, "msg": "Waiting",
+                              "folder": "", "stems": [], "err": "", "added": time.time(), "secs": 0})
+            self.last_ids = [jid]
+        self.wake.set()
+        return jid
 
     def get(self, jid: int) -> dict | None:
         with self.lock:
@@ -89,7 +102,15 @@ class Jobs:
 
             bind(cb, ev)
             try:
-                out = self.eng.run(Path(j["path"]), j["steps"])
+                if j.get("kind") == "stem":
+                    out = process_stem(self.eng, Path(j["path"]), j["stem"], j["model"], j["modelName"])
+                else:
+                    out = self.eng.run(Path(j["path"]), j["steps"])
+                if self.lib:
+                    try:
+                        self.lib.add(out["folder"])
+                    except Exception:  # noqa: BLE001
+                        pass
                 j.update(state="done", pct=100, msg="Done", folder=out["folder"], stems=out["stems"])
             except Cancelled:
                 j.update(state="cancelled", msg="Cancelled")

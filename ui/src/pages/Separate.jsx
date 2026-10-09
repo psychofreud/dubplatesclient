@@ -4,7 +4,7 @@ import { IcUpload, IcFolder, IcFile, IcX, IcCheck, IcWarn } from '../icons.jsx';
 import { StemChips, fmtTime } from '../ui.jsx';
 import ModelPicker from '../ModelPicker.jsx';
 
-export default function Separate({ cfg, models, jobs, say, go, setConfig }) {
+export default function Separate({ cfg, models, jobs, say, go, setConfig, openSet }) {
   const installed = models.filter(m => m.installed);
   const sel = installed.find(m => m.file === cfg.model) || installed[0];
   // drum models: their stems are drum parts (kick, snare…). Used as a second step on the Drums stem.
@@ -62,9 +62,9 @@ export default function Separate({ cfg, models, jobs, say, go, setConfig }) {
         )}
       </section>
 
-      <section className={'drop' + (drag ? ' over' : '')} onClick={pickFiles}>
-        <div className="drop-ic"><IcUpload size={30} /></div>
-        <b>{drag ? 'Drop to add' : 'Drop tracks or folders here'}</b>
+      <section className={'drop' + (drag ? ' over' : '') + (jobs.length && !drag ? ' mini' : '')} onClick={pickFiles}>
+        <div className="drop-ic"><IcUpload size={jobs.length && !drag ? 18 : 30} /></div>
+        <b>{drag ? 'Drop to add' : jobs.length ? 'Drop more tracks or folders' : 'Drop tracks or folders here'}</b>
         <span>WAV, FLAC, MP3, M4A, OGG, AIFF</span>
         <div className="drop-btns" onClick={e => e.stopPropagation()}>
           <button className="btn" onClick={pickFiles}><IcFile size={16} /> Add files</button>
@@ -79,14 +79,14 @@ export default function Separate({ cfg, models, jobs, say, go, setConfig }) {
       {jobs.length > 0 && (
         <section className="queue">
           <div className="q-head"><h2>Queue</h2>{done > 0 && <button className="btn ghost sm" onClick={() => call('clear_jobs')}>Clear finished</button>}</div>
-          {[...jobs].reverse().map(j => <Job key={j.id} j={j} say={say} />)}
+          {[...jobs].reverse().map(j => <Job key={j.id} j={j} say={say} openSet={openSet} />)}
         </section>
       )}
     </div>
   );
 }
 
-function Job({ j, say }) {
+function Job({ j, say, openSet }) {
   const open = p => call('open_path', p).catch(e => say(e.message, 'err'));
   const icon = j.state === 'done' ? <IcCheck size={16} /> : j.state === 'error' ? <IcWarn size={16} /> : j.state === 'cancelled' ? <IcX size={16} /> : <IcFile size={16} />;
   return (
@@ -106,7 +106,7 @@ function Job({ j, say }) {
         </div>
       </div>
       <div className="job-act">
-        {j.state === 'done' && <button className="btn sm" onClick={() => open(j.folder)}><IcFolder size={14} /> Open</button>}
+        {j.state === 'done' && <><button className="btn pri sm" onClick={() => openSet(j.folder)}>View</button><button className="btn sm" onClick={() => open(j.folder)}><IcFolder size={14} /> Folder</button></>}
         {(j.state === 'running' || j.state === 'queued') && <button className="btn ghost sm" onClick={() => call('cancel_job', j.id)}>Cancel</button>}
       </div>
     </div>

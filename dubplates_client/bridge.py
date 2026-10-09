@@ -108,7 +108,9 @@ class Requests:
 
 
 def serve(api) -> int | None:
+    import secrets
     reqs = api._site = Requests(api)
+    media_token = secrets.token_urlsafe(18)          # (only the client's window knows it)
 
     class H(BaseHTTPRequestHandler):
         server_version = "DubplatesClient"
@@ -133,12 +135,12 @@ def serve(api) -> int | None:
             self.end_headers()
             self.wfile.write(data)
 
-        def _file(self, f: Path):
+        def _file(self, f: Path, origin: str | None = None):
             self.send_response(200)
             self.send_header("Content-Type", mimetypes.guess_type(f.name)[0] or "application/octet-stream")
             self.send_header("Content-Length", str(f.stat().st_size))
             self.send_header("Cache-Control", "no-store")
-            self.send_header("Access-Control-Allow-Origin", self._origin())
+            self.send_header("Access-Control-Allow-Origin", origin or self._origin())
             self.send_header("Vary", "Origin")
             self.end_headers()
             with open(f, "rb") as fh:
@@ -160,6 +162,14 @@ def serve(api) -> int | None:
             self.end_headers()
 
         def do_GET(self):
+            u = urlsplit(self.path)
+            if u.path == f"/media/{media_token}":             # the client's own window: play stem files (Library)
+                f = Path((parse_qs(u.query).get("f") or [""])[0])
+                if not f.is_file() or not api._lib.allowed(f):
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                return self._file(f, "*")
             if not self._origin():
                 return self._send(403, {"error": "Only dubplates.net"})
             if self.path == "/v1/ping":
@@ -239,6 +249,7 @@ def serve(api) -> int | None:
         except OSError:
             continue
         threading.Thread(target=srv.serve_forever, daemon=True, name="bridge").start()
+        api._media = f"http://127.0.0.1:{port}/media/{media_token}?f="
         log.info("bridge on 127.0.0.1:%s", port)
         return port
     log.warning("bridge: no free port")

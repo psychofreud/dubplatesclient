@@ -21,3 +21,4 @@ export const IcSearch = p => <I {...p} d={<><circle cx="11" cy="11" r="7" /><pat
 export const IcChip = p => <I {...p} d={<><rect x="6" y="6" width="12" height="12" rx="2" /><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4" /></>} />;
 export const IcWarn = p => <I {...p} d={<><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18h.01" /></>} />;
 export const IcLink = p => <I {...p} d={<><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>} />;
+export const IcLibrary = p => <I {...p} d={<><path d="M4 4h4v16H4zM10 4h4v16h-4z" /><path d="M16.5 4.5l3.8 1-3.9 15-3.8-1z" /></>} />;

@@ -1,14 +1,16 @@
 import React from 'react';
 import { call } from './api.js';
-import { IcStems, IcModels, IcSettings, IcChip, IcLink } from './icons.jsx';
+import { IcStems, IcModels, IcSettings, IcChip, IcLink, IcLibrary } from './icons.jsx';
 import Separate from './pages/Separate.jsx';
 import Models from './pages/Models.jsx';
 import Settings from './pages/Settings.jsx';
+import Library from './pages/Library.jsx';
 import Setup from './pages/Setup.jsx';
 import LinkAsk from './LinkAsk.jsx';
 
 const PAGES = [
   { id: 'separate', label: 'Make stems', Icon: IcStems },
+  { id: 'library', label: 'Library', Icon: IcLibrary },
   { id: 'models', label: 'Models', Icon: IcModels },
   { id: 'settings', label: 'Settings', Icon: IcSettings },
 ];
@@ -25,6 +27,8 @@ export default function App() {
 function Main({ hello }) {
   const [page, setPage] = React.useState('separate');
   const [cfg, setCfg] = React.useState(hello.config);
+  const [libSel, setLibSel] = React.useState(null);           // the open stem set: {id} or {folder} (from the queue)
+  const openSet = folder => { setLibSel({ folder }); setPage('library'); };
   const [models, setModels] = React.useState([]);
   const [st, setSt] = React.useState({ jobs: [], installs: {} });
   const [toast, setToast] = React.useState(null);
@@ -97,7 +101,8 @@ function Main({ hello }) {
       </aside>
       <main className="main">
         {!cfg ? <div className="center"><span className="spin" /> Starting the engine…</div> : (
-          page === 'separate' ? <Separate cfg={cfg} models={models} jobs={st.jobs} say={say} go={setPage} setConfig={setConfig} />
+          page === 'separate' ? <Separate cfg={cfg} models={models} jobs={st.jobs} say={say} go={setPage} setConfig={setConfig} openSet={openSet} />
+            : page === 'library' ? <Library models={models} jobs={st.jobs} say={say} sel={libSel} setSel={setLibSel} go={setPage} />
             : page === 'models' ? <Models cfg={cfg} models={models} installs={st.installs} reload={loadModels} say={say} setConfig={setConfig} go={setPage} />
               : <Settings cfg={cfg} hello={hello} setConfig={setConfig} say={say} onUpdate={setUpd} />
         )}

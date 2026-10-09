@@ -54,6 +54,16 @@ function fake() {
     open_path: ok, open_url: async u => { window.open(u, '_blank'); return true; },
     pending_link: async () => (location.search.includes('link') ? { action: 'separate', root: 'Music', path: 'Dub/King Tubby - Dub Fi Gwan.mp3', name: 'King Tubby - Dub Fi Gwan.mp3', needRoot: location.search.includes('root') } : null),
     set_root: async () => ({ file: 'D:\\Music\\Dub\\King Tubby - Dub Fi Gwan.mp3' }),
+    library: async () => [
+      { id: 'l1', folder: 'D:\\Music\\Burial - Archangel Stems', name: 'Burial - Archangel', created: '2026-10-09T14:12:00', model: 'BS-Roformer SW (6 stems)', stems: ['Vocals', 'Drums', 'Bass', 'Guitar', 'Piano', 'Other'], parts: 6, missing: false, added: 3 },
+      { id: 'l2', folder: 'D:\\Music\\Mala - Changes Stems', name: 'Mala - Changes', created: '2026-10-08T21:40:00', model: 'BS-Roformer 1297', stems: ['Vocals', 'Instrumental'], parts: 0, missing: false, added: 2 },
+      { id: 'l3', folder: 'E:\\Old\\Skream Stems', name: 'Skream - Midnight Request Line', created: '2026-10-01', model: 'Demucs v4', stems: ['Vocals', 'Drums', 'Bass', 'Other'], parts: 0, missing: true, added: 1 }],
+    library_detail: async () => ({ id: 'l1', folder: 'D:/Music/Burial - Archangel Stems', sourceFile: 'D:/Music/Burial - Archangel.flac', media: null,
+      meta: { created: '2026-10-09T14:12:00', model: { name: 'BS-Roformer SW (6 stems)' }, source: { name: 'Burial - Archangel.flac' },
+        stems: ['Vocals', 'Drums', 'Bass', 'Guitar', 'Piano', 'Other'].map(n => ({ name: n, file: `Burial - Archangel - ${n}.flac`, ...(n === 'Drums' ? { parts: ['Kick', 'Snare', 'Toms', 'Hi-Hat', 'Ride', 'Crash'].map(p => ({ name: p, file: `Drums parts/x - ${p}.flac` })) } : {}) })) } }),
+    peaks: async path => { let s = 0; for (const ch of path) s = (s * 31 + ch.charCodeAt(0)) % 9973; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+      const env = 0.3 + rnd() * 0.6; return { dur: 238, peaks: Array.from({ length: 1600 }, (_, i) => { const a = env * (0.35 + 0.65 * Math.abs(Math.sin(i / (20 + rnd() * 3)))) * (0.6 + rnd() * 0.4) * (i > 1500 ? (1600 - i) / 100 : 1); return [-a, a]; }) }; },
+    library_add: async () => ({ cancelled: true }), library_remove: ok, stem_work: async () => ({ job: 9 }),
     check_update: async () => ({ current: '0.1.1', latest: '0.1.2', newer: true, url: 'https://github.com/psychofreud/dubplatesclient/releases/' }),
   };
 }

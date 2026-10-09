@@ -343,10 +343,31 @@ class Engine:
         finally:
             _local.cb = outer
         meta = {"app": "Dubplates.net Client", "version": VERSION, "schema": 1, "created": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                "source": {"name": src.name, "size": src.stat().st_size, "sha256": file_sha256(src)},
+                "source": {"name": src.name, "path": str(src), "size": src.stat().st_size, "sha256": file_sha256(src)},
                 "model": done[0], "steps": done, "format": self.cfg["format"], "stems": stems}
         (folder / "dubplates.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         return {"folder": str(folder), "stems": stems}
+
+
+def process_stem(eng: "Engine", folder: Path, stem: str, model_file: str, model_name: str) -> dict:
+    """More work on one stem of a set: run another model on it (De-Reverb on Vocals, Drum Split on Drums…).
+    The result goes in '<Stem> - <model>/' and is listed under that stem ("derived") in dubplates.json.
+    (Later: filters and VST steps work the same way: one stem in, new files listed under it.)"""
+    meta_p = folder / "dubplates.json"
+    meta = json.loads(meta_p.read_text(encoding="utf-8"))
+    tgt = next((s for s in meta["stems"] if s["name"].lower() == stem.lower()), None)
+    if not tgt:
+        raise ValueError(f"No stem “{stem}” in this set")
+    track = safe_name(Path((meta.get("source") or {}).get("name") or folder.name).stem)
+    sub = folder / safe_name(f"{tgt['name']} - {model_name}")
+    out = eng._split(folder / tgt["file"], model_file, sub, f"{track} - {tgt['name']}", folder)
+    meta = json.loads(meta_p.read_text(encoding="utf-8"))          # (read again: it may have changed meanwhile)
+    tgt = next(s for s in meta["stems"] if s["name"].lower() == stem.lower())
+    tgt["derived"] = [d for d in tgt.get("derived") or [] if d.get("model") != model_file] + [
+        {"model": model_file, "name": model_name, "created": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "stems": out}]
+    meta.setdefault("steps", []).append({"model": model_file, "name": model_name, "on": tgt["name"]})
+    meta_p.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    return {"folder": str(folder), "stems": out}
 
 
 class _Dl:

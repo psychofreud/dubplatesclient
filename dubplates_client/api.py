@@ -35,7 +35,9 @@ class Api:
     def __init__(self):
         self._cfg = Config()
         self._eng = Engine(self._cfg)
-        self._jobs = Jobs(self._eng)
+        from .library import Library
+        self._lib = Library()
+        self._jobs = Jobs(self._eng, self._lib)
         self._inst = Installs(self._eng)
         self._window = None
         self._device = None
@@ -260,6 +262,77 @@ class Api:
             return {"error": f"“{path_in_root}” is not in that folder. Choose the folder that you chose as music folder on dubplates.net."}
         self._cfg.update({"roots": {**self._cfg["roots"], root: d}})
         return {"file": str(f)}
+
+    # ---------- library: the user's stem sets ----------
+    @safe
+    def library(self):
+        return self._lib.list()
+
+    @safe
+    def library_detail(self, lid):
+        d = self._lib.detail(lid)
+        d["media"] = getattr(self, "_media", None)        # base URL to play files (bridge.py)
+        return d
+
+    @safe
+    def peaks(self, path, n=1600):
+        """The waveform of a file for the stem view: n pairs [min, max] (mono), and the length in seconds.
+        Kept in <app dir>/peaks/ (by file, size and time), so a set opens fast the next time."""
+        import hashlib
+        import json as _json
+        import numpy as np
+        import soundfile as sf
+        from .config import app_dir
+        f = Path(path)
+        if not self._lib.allowed(f):
+            return {"error": "Not in the library"}
+        st = f.stat()
+        key = hashlib.sha1(f"{f.resolve()}|{st.st_size}|{st.st_mtime_ns}|{n}".encode()).hexdigest()[:20]
+        cache = app_dir() / "peaks" / f"{key}.json"
+        try:
+            return _json.loads(cache.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        info = sf.info(str(f))
+        total = max(1, info.frames)
+        step = max(1, total // n)
+        lo, hi = np.zeros(n, np.float32), np.zeros(n, np.float32)
+        i = 0
+        for block in sf.blocks(str(f), blocksize=step * 64, dtype="float32", always_2d=True):
+            m = block.mean(axis=1)
+            k = len(m) // step
+            if k:
+                b = m[:k * step].reshape(k, step)
+                j = min(n, i + k)
+                lo[i:j], hi[i:j] = b.min(axis=1)[:j - i], b.max(axis=1)[:j - i]
+                i = j
+            if i >= n:
+                break
+        out = {"dur": round(info.frames / info.samplerate, 3), "peaks": [[round(float(a), 3), round(float(b), 3)] for a, b in zip(lo, hi)]}
+        cache.parent.mkdir(exist_ok=True)
+        cache.write_text(_json.dumps(out), encoding="utf-8")
+        return out
+
+    @safe
+    def library_add(self):
+        f = self.pick_folder()
+        if not f:
+            return {"cancelled": True}
+        return self._lib.add(f)
+
+    @safe
+    def library_remove(self, lid):
+        self._lib.remove(lid)
+        return True
+
+    @safe
+    def stem_work(self, lid, stem, model_file):
+        """Run another model on one stem of a set."""
+        f = self._lib.folder(lid)
+        m = next((r for r in self.models() if r["file"] == model_file), None)
+        if not f or not m or not m["installed"]:
+            return {"error": "Install the model first (Models page)"}
+        return {"job": self._jobs.add_stem_work(str(f), stem, model_file, m["name"])}
 
     @safe
     def check_update(self):
