@@ -162,6 +162,11 @@ class Api:
         return True
 
     @safe
+    def check_update(self):
+        from . import updates
+        return updates.check()
+
+    @safe
     def open_url(self, url):
         if not str(url).startswith("https://"):
             return {"error": "Only https links"}

@@ -3,7 +3,16 @@ import { call } from '../api.js';
 import { Seg } from '../ui.jsx';
 import { IcFolder } from '../icons.jsx';
 
-export default function Settings({ cfg, hello, setConfig }) {
+export default function Settings({ cfg, hello, setConfig, say, onUpdate }) {
+  const [checking, setChecking] = React.useState(false);
+  const checkUpdate = async () => {
+    setChecking(true);
+    try {
+      const u = await call('check_update');
+      if (u.newer) { onUpdate(u); say(`Version ${u.latest} is out`, 'ok'); } else say(`You have the newest version (${u.current})`, 'ok');
+    } catch (e) { say('Could not check: ' + e.message, 'err'); }
+    setChecking(false);
+  };
   const browse = async key => { const f = await call('pick_folder'); if (f) setConfig({ [key]: f, ...(key === 'outDir' ? { outMode: 'folder' } : {}) }); };
   const dev = hello?.device;
   return (
@@ -52,6 +61,7 @@ export default function Settings({ cfg, hello, setConfig }) {
         <p>Dubplates.net Client {hello?.version}. Free and open source (GPL-3.0). Engine: audio-separator and PyTorch.
           Models belong to their authors and have their own licences.</p>
         <div className="in-row">
+          <button className="btn sm" onClick={checkUpdate} disabled={checking}>{checking ? 'Checking…' : 'Check for updates'}</button>
           <button className="btn sm" onClick={() => call('open_url', 'https://github.com/psychofreud/dubplatesclient')}>Source code</button>
           <button className="btn sm" onClick={() => call('open_path', cfg.appDir)}>Open settings folder</button>
         </div>

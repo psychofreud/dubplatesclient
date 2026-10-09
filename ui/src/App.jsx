@@ -36,6 +36,9 @@ function Main({ hello }) {
   }, [say]);
 
   React.useEffect(() => { loadModels(); }, [loadModels]);
+  // a newer release on GitHub? (once per start; no network = no message)
+  const [upd, setUpd] = React.useState(null);
+  React.useEffect(() => { call('check_update').then(u => u.newer && setUpd(u)).catch(() => {}); }, []);
 
   // live state: jobs + installs (fast while something runs)
   const busy = st.jobs.some(j => j.state === 'running' || j.state === 'queued') || Object.values(st.installs).some(i => !i.done);
@@ -74,6 +77,13 @@ function Main({ hello }) {
           ))}
         </nav>
         <div className="side-foot">
+          {upd && (
+            <div className="upd">
+              <b>Version {upd.latest} is out</b>
+              <small>You have {upd.current}. Install it over this one: your models and settings stay.</small>
+              <button className="btn pri sm" onClick={() => call('open_url', upd.url)}>Download</button>
+            </div>
+          )}
           {dev && (
             <div className={'device ' + dev.kind} title="The engine runs on this">
               <IcChip size={16} />
@@ -88,7 +98,7 @@ function Main({ hello }) {
         {!cfg ? <div className="center"><span className="spin" /> Starting the engine…</div> : (
           page === 'separate' ? <Separate cfg={cfg} models={models} jobs={st.jobs} say={say} go={setPage} setConfig={setConfig} />
             : page === 'models' ? <Models cfg={cfg} models={models} installs={st.installs} reload={loadModels} say={say} setConfig={setConfig} go={setPage} />
-              : <Settings cfg={cfg} hello={hello} setConfig={setConfig} say={say} />
+              : <Settings cfg={cfg} hello={hello} setConfig={setConfig} say={say} onUpdate={setUpd} />
         )}
       </main>
       {toast && <div className={'toast ' + toast.kind} key={toast.t} onClick={() => setToast(null)}>{toast.text}</div>}

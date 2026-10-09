@@ -52,5 +52,6 @@ function fake() {
     add_jobs: async p => ({ added: p.length }), cancel_job: ok, clear_jobs: ok,
     set_config: async p => Object.assign(cfg, p), pick_files: async () => [], pick_folder: async () => '', pick_model_file: async () => '',
     open_path: ok, open_url: async u => { window.open(u, '_blank'); return true; },
+    check_update: async () => ({ current: '0.1.1', latest: '0.1.2', newer: true, url: 'https://github.com/psychofreud/dubplatesclient/releases/' }),
   };
 }
