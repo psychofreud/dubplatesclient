@@ -91,8 +91,24 @@ def _patch_progress():
 
 
 from audio_separator.separator import Separator  # noqa: E402
+from audio_separator.separator import common_separator as _cs  # noqa: E402
 
 _patch_progress()
+
+# audio-separator writes the stems with the input's subtype. An MP3 input gives "MPEG_LAYER_III", a float or
+# 32-bit WAV gives FLOAT / PCM_32: FLAC can not store these ("Invalid combination of format, subtype and endian").
+_SUBTYPES = {"FLAC": ("PCM_16", "PCM_24"), "WAV": ("PCM_16", "PCM_24", "PCM_32", "FLOAT")}
+_write_sf = _cs.CommonSeparator.write_audio_soundfile
+
+
+def _write_sf_safe(self, stem_path, stem_source):
+    ok = _SUBTYPES.get((self.output_format or "").upper())
+    if ok and getattr(self, "input_subtype", None) not in ok:
+        self.input_subtype = "PCM_24"
+    return _write_sf(self, stem_path, stem_source)
+
+
+_cs.CommonSeparator.write_audio_soundfile = _write_sf_safe
 
 
 class Sep(Separator):
