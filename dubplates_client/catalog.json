@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "models": [
+    {"group": "vocals", "file": "model_bs_roformer_ep_317_sdr_12.9755.ckpt", "name": "BS-Roformer 1297", "badge": "Start here",
+     "desc": "Vocals + instrumental. Clean and fast. The best all-round model.", "stems": ["Vocals", "Instrumental"]},
+    {"group": "vocals", "file": "melband_roformer_big_beta4.ckpt", "name": "Mel-Roformer Big Beta 4",
+     "desc": "Very clean vocals. Slower and needs more GPU memory.", "stems": ["Vocals", "Other"]},
+    {"group": "vocals", "file": "mel_band_roformer_instrumental_bleedless_v3_gabox.ckpt", "name": "Mel-Roformer Instrumental (bleedless)",
+     "desc": "Instrumental with almost no vocal bleed.", "stems": ["Instrumental", "Vocals"]},
+    {"group": "vocals", "file": "mel_band_roformer_karaoke_becruily.ckpt", "name": "Mel-Roformer Karaoke",
+     "desc": "Lead vocal on its own, backing vocals stay with the music.", "stems": ["Vocals", "Instrumental"]},
+
+    {"group": "multi", "file": "BS-Roformer-SW.ckpt", "name": "BS-Roformer SW (6 stems)", "badge": "Mega-stem",
+     "desc": "Vocals, drums, bass, guitar, piano and other. The best multi-stem model.", "stems": ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"]},
+    {"group": "multi", "file": "htdemucs_ft.yaml", "name": "Demucs v4 Fine-tuned (4 stems)",
+     "desc": "Vocals, drums, bass and other. Classic, reliable.", "stems": ["Vocals", "Drums", "Bass", "Other"]},
+    {"group": "multi", "file": "htdemucs_6s.yaml", "name": "Demucs v4 (6 stems)",
+     "desc": "Adds guitar and piano. Guitar and piano are less clean.", "stems": ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"]},
+    {"group": "multi", "file": "MDX23C-DrumSep-aufr33-jarredou.ckpt", "name": "Drum Split",
+     "desc": "Splits a drum stem into kick, snare, toms, hi-hat, ride and crash. Use it on a drum stem.", "stems": ["Kick", "Snare", "Toms", "Hi-Hat", "Ride", "Crash"]},
+
+    {"group": "clean", "file": "dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt", "name": "De-Reverb",
+     "desc": "Removes room and reverb. Best on a vocal stem.", "stems": ["No Reverb", "Reverb"]},
+    {"group": "clean", "file": "dereverb-echo_mel_band_roformer_sdr_13.4843_v2.ckpt", "name": "De-Reverb + Echo",
+     "desc": "Removes reverb and delay echoes.", "stems": ["Dry", "No Dry"]},
+    {"group": "clean", "file": "denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt", "name": "De-Noise",
+     "desc": "Removes hiss and noise.", "stems": ["Dry", "Other"]},
+    {"group": "clean", "file": "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt", "name": "Crowd Remover",
+     "desc": "Removes crowd noise and applause from live recordings.", "stems": ["Crowd", "Other"]},
+    {"group": "clean", "file": "mel_band_roformer_bleed_suppressor_v1.ckpt", "name": "Bleed Suppressor",
+     "desc": "Removes vocal bleed from an instrumental stem.", "stems": ["Instrumental", "Bleed"]}
+  ]
+}

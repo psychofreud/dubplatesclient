@@ -1,0 +1,7 @@
+# PyTorch: run.bat / run.sh install it first (CUDA build on Windows/Linux with an NVIDIA GPU; macOS uses the Apple GPU).
+audio-separator[gpu]>=0.47; sys_platform != "darwin"
+audio-separator>=0.47; sys_platform == "darwin"
+pywebview>=6.2
+imageio-ffmpeg>=0.6     # ffmpeg for computers that do not have it
+requests
+pyyaml
