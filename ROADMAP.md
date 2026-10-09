@@ -20,8 +20,11 @@
   A hacked server can not push a bad model. Every model has a SHA-256.
 
 ## Phase 4: tools on stems
-- Clean-up: gate, bleed reduction, high/low-pass, de-noise; combine two models (ensemble).
-- VST3 / AU host (Spotify `pedalboard`, GPL-3.0: fits this client's licence).
+- [x] Effects chain per stem: bleed reduction, repair, gate, compression, EQ, filters, limiter, gain (0.1.7).
+- [x] VST3 plugins in the chain (pedalboard), plugin window or sliders.
+- [ ] De-comb (the old Stemmer's AI-upsampling comb cut).
+- [ ] Effects on drum parts and on "more work" results; combine two models (ensemble).
+- [ ] AU plugins on macOS.
 
 ## Drum tools (later)
 Built on the drum parts from the chain (`stems[].parts` in `dubplates.json`):
