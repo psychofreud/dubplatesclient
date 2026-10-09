@@ -5,6 +5,7 @@ import Separate from './pages/Separate.jsx';
 import Models from './pages/Models.jsx';
 import Settings from './pages/Settings.jsx';
 import Setup from './pages/Setup.jsx';
+import LinkAsk from './LinkAsk.jsx';
 
 const PAGES = [
   { id: 'separate', label: 'Make stems', Icon: IcStems },
@@ -101,6 +102,7 @@ function Main({ hello }) {
               : <Settings cfg={cfg} hello={hello} setConfig={setConfig} say={say} onUpdate={setUpd} />
         )}
       </main>
+      {cfg && <LinkAsk cfg={cfg} models={models} setConfig={setConfig} say={say} go={setPage} />}
       {toast && <div className={'toast ' + toast.kind} key={toast.t} onClick={() => setToast(null)}>{toast.text}</div>}
     </div>
   );

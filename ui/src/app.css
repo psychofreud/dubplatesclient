@@ -206,6 +206,15 @@ option,optgroup{background:#15161a;color:var(--ink);}
 .f-r{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0;}
 .about p{color:var(--ink2);margin:0 0 12px;}
 
+/* a link from dubplates.net */
+.modal-bg{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;animation:fade .15s ease;}
+.modal{width:520px;max-width:100%;display:flex;flex-direction:column;gap:10px;padding:24px 26px;background:#121317;}
+.modal-x{position:absolute;top:14px;right:14px;}
+.modal-track{margin:2px 0 0;font-size:18px;font-weight:700;word-break:break-word;}
+.modal .sub{margin:0 0 6px;}
+.modal .btn.pri{align-self:flex-start;}
+.modal .mpk{min-width:0;}
+.modal-btns{display:flex;gap:8px;margin-top:8px;}
 /* first-start setup */
 .app.solo{display:block;}
 .setup{position:absolute;inset:0;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:30px 16px;}

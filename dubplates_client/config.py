@@ -40,6 +40,7 @@ DEFAULTS = {
     "drumSplit": "",            # a drum model: split the Drums stem again (empty = off)
     "overwrite": False,         # False = a second run makes "<Track> Stems (2)"
     "custom": [],               # custom models: [{file, yaml, name, stems, url, yamlUrl, sha256}]
+    "roots": {},                # dubplates.net music folders: {folder name in the browser: full path on this computer}
 }
 
 
@@ -84,6 +85,8 @@ class Config:
                     self.data[k] = v
                 elif k == "overwrite" and isinstance(v, bool):
                     self.data[k] = v
+                elif k == "roots" and isinstance(v, dict):
+                    self.data[k] = {str(a)[:200]: str(b) for a, b in v.items()}
                 elif k == "custom" and isinstance(v, list):
                     self.data[k] = v
             self.save()

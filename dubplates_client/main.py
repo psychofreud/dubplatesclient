@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import secrets
+import socket
 import subprocess
 import sys
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -23,6 +26,48 @@ def ui_entry() -> str:
         return dev
     base = Path(getattr(sys, "_MEIPASS", HERE.parent))
     return str(base / "ui" / "dist" / "index.html")
+
+
+INSTANCE = app_dir() / "instance.json"     # the running window: {port, token} (a second start sends its link there)
+
+
+def link_arg() -> str | None:
+    return next((a for a in sys.argv[1:] if a.lower().startswith("dubplates://")), None)
+
+
+def forward(url: str | None) -> bool:
+    """Another window is open: give it the link (or just bring it to the front) and stop here."""
+    try:
+        info = json.loads(INSTANCE.read_text(encoding="utf-8"))
+        with socket.create_connection(("127.0.0.1", int(info["port"])), timeout=2) as s:
+            s.sendall((json.dumps({"token": info["token"], "url": url or ""}) + "\n").encode())
+            return s.recv(16).startswith(b"ok")
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def listen(on_link):
+    """Waits for links from later starts (local only, with a random token)."""
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(4)
+    token = secrets.token_urlsafe(24)
+    INSTANCE.write_text(json.dumps({"port": srv.getsockname()[1], "token": token, "pid": os.getpid()}), encoding="utf-8")
+
+    def loop():
+        while True:
+            c, _ = srv.accept()
+            try:
+                c.settimeout(3)
+                msg = json.loads(c.makefile().readline() or "{}")
+                if secrets.compare_digest(str(msg.get("token", "")), token):
+                    c.sendall(b"ok")
+                    on_link(msg.get("url") or None)
+            except Exception:  # noqa: BLE001
+                pass
+            finally:
+                c.close()
+    threading.Thread(target=loop, daemon=True, name="instance").start()
 
 
 class SetupApi:
@@ -70,6 +115,10 @@ def main():
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("net.dubplates.client")
         except Exception:  # noqa: BLE001
             pass
+    url = link_arg()
+    if forward(url):
+        logging.info("the client is already open: link sent to it")
+        return
     import webview
     from webview.dom import DOMEventHandler
 
@@ -86,6 +135,22 @@ def main():
     win = webview.create_window("Dubplates.net Client", ui_entry(), js_api=api, width=1280, height=820, min_size=(960, 640),
                                 background_color="#060607", text_select=False)
     api._window = win
+    api._pending = url
+
+    def on_link(u):
+        """A link (or a second start) while the window is open: bring the window to the front, the UI asks."""
+        api._pending = u or getattr(api, "_pending", None)
+        try:
+            win.restore()
+            win.show()
+            win.on_top = True
+            win.on_top = False
+            if ready and u:
+                win.evaluate_js("window.__dpLink && window.__dpLink()")
+        except Exception:  # noqa: BLE001
+            pass
+
+    listen(on_link)
 
     def on_drop(e):
         paths = [f.get("pywebviewFullPath") for f in (e.get("dataTransfer") or {}).get("files", []) if f.get("pywebviewFullPath")]

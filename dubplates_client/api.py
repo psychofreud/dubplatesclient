@@ -161,6 +161,49 @@ class Api:
             subprocess.Popen(["xdg-open", str(p)])
         return True
 
+    # ---------- dubplates:// links from the site ----------
+    def _link(self, url: str) -> dict:
+        """dubplates://open  |  dubplates://separate?root=<music folder name>&path=<file in it>.
+        Only reads the link: nothing starts before the user says yes in the window."""
+        from urllib.parse import parse_qs, urlsplit
+        u = urlsplit(url)
+        action = (u.netloc or u.path.strip("/")).lower()
+        if action != "separate":
+            return {"action": "open"}
+        q = parse_qs(u.query)
+        root, rel = (q.get("root") or [""])[0][:200], (q.get("path") or [""])[0][:1000]
+        parts = [p for p in rel.replace("\\", "/").split("/") if p]
+        if not root or not parts or any(p in (".", "..") or ":" in p for p in parts) or Path(parts[-1]).suffix.lower() not in AUDIO:
+            return {"action": "error", "error": "This link is not a track in your music folder."}
+        out = {"action": "separate", "root": root, "path": "/".join(parts), "name": parts[-1]}
+        base = self._cfg["roots"].get(root)
+        f = Path(base, *parts) if base else None
+        if f and f.is_file():
+            out["file"] = str(f)
+        else:
+            out["needRoot"] = True
+            out["tried"] = base or ""
+        return out
+
+    @safe
+    def pending_link(self):
+        """The link that started the app / came from a second start (the UI asks for it once)."""
+        u, self._pending = getattr(self, "_pending", None), None
+        return self._link(u) if u else None
+
+    @safe
+    def set_root(self, root, path_in_root):
+        """The user shows where the music folder <root> is; the track must be in it."""
+        r = self._window.create_file_dialog(webview.FileDialog.FOLDER)
+        d = (r[0] if isinstance(r, (list, tuple)) else r) if r else ""
+        if not d:
+            return {"cancelled": True}
+        f = Path(d, *path_in_root.split("/"))
+        if not f.is_file():
+            return {"error": f"“{path_in_root}” is not in that folder. Choose the folder that you chose as music folder on dubplates.net."}
+        self._cfg.update({"roots": {**self._cfg["roots"], root: d}})
+        return {"file": str(f)}
+
     @safe
     def check_update(self):
         from . import updates

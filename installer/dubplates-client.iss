@@ -44,6 +44,13 @@ Source: "{#Src}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ign
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\python\pythonw.exe"; Parameters: "-m dubplates_client.main"; WorkingDir: "{app}\app"; IconFilename: "{app}\app\dubplates_client\assets\icon.ico"; AppUserModelID: "net.dubplates.client"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\python\pythonw.exe"; Parameters: "-m dubplates_client.main"; WorkingDir: "{app}\app"; IconFilename: "{app}\app\dubplates_client\assets\icon.ico"; AppUserModelID: "net.dubplates.client"; Tasks: desktopicon
 
+[Registry]
+; dubplates:// links (from dubplates.net: "Make stems") open the client. Per user, removed on uninstall.
+Root: HKCU; Subkey: "Software\Classes\dubplates"; ValueType: string; ValueName: ""; ValueData: "URL:Dubplates.net Client"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\dubplates"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\dubplates\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\app\dubplates_client\assets\icon.ico"""
+Root: HKCU; Subkey: "Software\Classes\dubplates\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\python\pythonw.exe"" -m dubplates_client.main ""%1"""
+
 [Run]
 Filename: "{app}\python\pythonw.exe"; Parameters: "-m dubplates_client.main"; WorkingDir: "{app}\app"; Description: "Start {#AppName}"; Flags: postinstall nowait skipifsilent
 
