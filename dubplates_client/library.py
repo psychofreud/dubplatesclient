@@ -77,6 +77,8 @@ class Library:
             file = file.resolve()
         except OSError:
             return False
+        if (app_dir() / "preview").resolve() in file.parents:
+            return True                                   # (effect previews)
         for f in self.folders():
             f = f.resolve()
             if f in file.parents:

@@ -5,6 +5,7 @@
 import React from 'react';
 import { call } from './api.js';
 import ModelPicker from './ModelPicker.jsx';
+import FxPanel from './FxPanel.jsx';
 import { stemHue } from './ui.jsx';
 import { IcFolder, IcStems } from './icons.jsx';
 
@@ -20,13 +21,17 @@ export default function StemView({ id, models, jobs, say }) {
   const [playing, setPlaying] = React.useState(false);
   const [work, setWork] = React.useState(null);           // {stem, model}
   const [dur, setDur] = React.useState(0);
+  const [fxStem, setFxStem] = React.useState(null);      // the effects panel is open for this stem
   const audio = React.useRef({}), clock = React.useRef({ t0: 0, pos: 0, on: false }), heads = React.useRef([]), timeEl = React.useRef(null);
 
   const load = React.useCallback(() => call('library_detail', id).then(setD).catch(e => setErr(e.message)), [id]);
   React.useEffect(() => { load(); }, [load]);
   // more work on a stem of this set finished: show its result
-  const doneKey = jobs.filter(j => j.kind === 'stem' && j.state === 'done' && d && j.path === d.folder).map(j => j.id).join(',');
-  React.useEffect(() => { if (doneKey) load(); }, [doneKey]);  // eslint-disable-line react-hooks/exhaustive-deps
+  const doneKey = jobs.filter(j => (j.kind === 'stem' || j.kind === 'fx') && j.state === 'done' && d && j.path === d.folder).map(j => j.id).join(',');
+  const refresh = React.useCallback(() => {        // a stem file changed (effects applied / restored): new waveform and audio
+    setPeaks({}); Object.values(audio.current).forEach(el => { el.pause(); el.src = ''; }); audio.current = {}; load();
+  }, [load]);
+  React.useEffect(() => { if (doneKey) refresh(); }, [doneKey]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // the lanes: original, stems, and under each stem its parts / results
   const lanes = React.useMemo(() => {
@@ -107,6 +112,7 @@ export default function StemView({ id, models, jobs, say }) {
     try { await call('stem_work', id, work.stem, work.model); say(`${work.stem}: ${installed.find(x => x.file === work.model)?.name} added to the queue`, 'ok'); setWork(null); } catch (e) { say(e.message, 'err'); }
   };
   heads.current = [];
+  const fxOn = name => !!(m.stems.find(s => s.name === name) || {}).fx;
 
   return (
     <div className="sv">
@@ -122,6 +128,7 @@ export default function StemView({ id, models, jobs, say }) {
         <span className="mono sv-time" ref={timeEl}>0:00 / {fmt(dur)}</span>
         <span className="dim sv-hint">Click a waveform to jump · M mute · S solo · Space play</span>
       </div>
+      {fxStem && <FxPanel key={fxStem} id={id} stem={fxStem} pos={now} say={say} onPlaying={on => { if (on) pause(); }} onClose={changed => { setFxStem(null); if (changed) refresh(); }} />}
       <div className="sv-lanes">
         {lanes.map(l => {
           const p = peaks[l.path], on = audible(l.key), hue = l.key === 'src' ? null : stemHue(l.name), job = busy.find(j => j.stem === l.name);
@@ -135,6 +142,7 @@ export default function StemView({ id, models, jobs, say }) {
                 <div className="sv-btns">
                   <button className={'ms' + (mute[l.key] ? ' on' : '')} onClick={() => setMute(x => ({ ...x, [l.key]: !x[l.key] }))} title="Mute">M</button>
                   <button className={'ms s' + (solo[l.key] ? ' on' : '')} onClick={() => setSolo(x => ({ ...x, [l.key]: !x[l.key] }))} title="Solo">S</button>
+                  {l.depth === 0 && l.key !== 'src' && <button className={'ms fxb' + (fxStem === l.name ? ' on' : '') + (fxOn(l.name) ? ' has' : '')} onClick={() => setFxStem(fxStem === l.name ? null : l.name)} title="Effects on this stem (filters, dynamics, EQ, VST plugins)">FX</button>}
                   {l.depth === 0 && l.key !== 'src' && <button className="ms more" onClick={() => setWork({ stem: l.name, model: work?.model || installed[0]?.file })} title="More work on this stem: run another model on it">＋</button>}
                 </div>
                 {job && <div className="sv-job"><div className="bar"><i style={{ width: Math.max(3, job.pct) + '%' }} /></div><small>{job.modelName} {Math.round(job.pct)}%</small></div>}

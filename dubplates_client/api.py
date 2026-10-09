@@ -3,6 +3,7 @@ Errors go back as {"error": "..."} so the UI can show them."""
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import os
 import subprocess
@@ -361,6 +362,96 @@ class Api:
         if not f or not m or not m["installed"]:
             return {"error": "Install the model first (Models page)"}
         return {"job": self._jobs.add_stem_work(str(f), stem, model_file, m["name"])}
+
+    # ---------- effects on a stem (fx.py) ----------
+    def _need_fx(self):
+        """Installs made before 0.1.7 have no pedalboard: get it once (small) with this app's own pip."""
+        import importlib.util
+        if importlib.util.find_spec("pedalboard") is None:
+            log.info("installing pedalboard (effects)")
+            r = subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "-q", "pedalboard>=0.9"],
+                               capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            if r.returncode != 0:
+                raise RuntimeError("Could not install the effects engine (pedalboard): " + (r.stderr or r.stdout)[-300:])
+            importlib.invalidate_caches()
+
+    @safe
+    def fx_catalog(self):
+        self._need_fx()
+        from . import fx
+        if getattr(self, "_vsts", None) is None:
+            self._vsts = fx.scan_vst()
+        return {**fx.catalog(), "vsts": self._vsts}
+
+    @safe
+    def fx_rescan(self):
+        from . import fx
+        self._vsts = fx.scan_vst()
+        return self._vsts
+
+    @safe
+    def fx_chain(self, lid, stem):
+        """The chain saved on this stem (from the last Apply), else the suggested one for its name."""
+        from . import fx
+        f = self._lib.folder(lid)
+        meta = self._lib.detail(lid)["meta"]
+        s = next((s for s in meta["stems"] if s["name"].lower() == stem.lower()), {})
+        orig = (f / ".originals" / Path(s.get("file", "")).name).exists()
+        if s.get("fx"):
+            return {"chain": s["fx"], "applied": True, "original": orig}
+        name = fx.SUGGEST.get(stem.lower(), "Natural cleanup")
+        return {"chain": fx.chain_preset(name), "applied": False, "original": orig, "suggested": name}
+
+    @safe
+    def fx_module(self, kind, preset=None):
+        from . import fx
+        return fx.module(kind, preset)
+
+    @safe
+    def fx_preset(self, name):
+        from . import fx
+        return fx.chain_preset(name)
+
+    @safe
+    def fx_preview(self, lid, stem, chain, start=0, dur=20):
+        """A short part of the stem through the chain (and the same part without it, for A/B)."""
+        import hashlib
+        from . import fx
+        from .config import app_dir
+        f = self._lib.folder(lid)
+        start = max(0.0, float(start))
+        key = hashlib.sha1(f"{f}|{stem}|{start:.2f}|{dur}|{json.dumps(chain, sort_keys=True)}".encode()).hexdigest()[:16]
+        d = app_dir() / "preview"
+        if d.exists():
+            for old_f in sorted(d.glob("*.wav"), key=lambda x: x.stat().st_mtime)[:-12]:
+                old_f.unlink(missing_ok=True)                # (keep the last few)
+        out = d / f"{key}.wav"
+        if not out.exists():
+            fx.preview(f, stem, chain, start, float(dur), out)
+        dry = d / f"{key}-dry.wav"
+        if not dry.exists():
+            fx.preview(f, stem, [], start, float(dur), dry)
+        return {"wet": str(out), "dry": str(dry), "start": start, "media": getattr(self, "_media", None)}
+
+    @safe
+    def fx_apply(self, lid, stem, chain):
+        f = self._lib.folder(lid)
+        return {"job": self._jobs.add_fx(str(f), stem, chain)}
+
+    @safe
+    def fx_restore(self, lid, stem):
+        from . import fx
+        return fx.restore(self._lib.folder(lid), stem)
+
+    @safe
+    def vst_params(self, path):
+        from . import fx
+        return fx.vst_params(path)
+
+    @safe
+    def vst_editor(self, path, state=None):
+        from . import fx
+        return fx.vst_editor(path, state or {})
 
     @safe
     def check_update(self):

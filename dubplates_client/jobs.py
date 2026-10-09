@@ -24,7 +24,7 @@ class Jobs:
     """The stem queue: one job at a time, in order. Saved in <app dir>/queue.json: after a restart (or a crash) the
     waiting jobs go on. While it works the computer stays awake (a whole library overnight)."""
 
-    KEEP = ("kind", "path", "base", "name", "steps", "modelName", "stem", "model", "skip", "added")
+    KEEP = ("kind", "path", "base", "name", "steps", "modelName", "stem", "model", "skip", "added", "chain")
 
     def __init__(self, engine: Engine, library=None):
         self.eng = engine
@@ -97,6 +97,19 @@ class Jobs:
         self.wake.set()
         return jid
 
+    def add_fx(self, folder: str, stem: str, chain: list) -> int:
+        """Apply an effects chain to one stem of a set (fx.apply): the stem file is replaced, the original kept."""
+        with self.lock:
+            jid = next(_ids)
+            self.cancels[jid] = threading.Event()
+            self.jobs.append({"id": jid, "kind": "fx", "path": folder, "name": f"{Path(folder).name} › {stem}", "stem": stem, "chain": chain,
+                              "modelName": "Effects", "state": "queued", "pct": 0, "msg": "Waiting", "folder": "", "stems": [],
+                              "err": "", "added": time.time(), "secs": 0})
+            self.last_ids = [jid]
+            self._save()
+        self.wake.set()
+        return jid
+
     def get(self, jid: int) -> dict | None:
         with self.lock:
             j = next((j for j in self.jobs if j["id"] == jid), None)
@@ -136,7 +149,7 @@ class Jobs:
         """For the queue header: counts and the time left (from the average time per track so far)."""
         with self.lock:
             c = Counter(j["state"] for j in self.jobs)
-            done = [j["secs"] for j in self.jobs if j["state"] == "done" and j.get("kind") != "stem" and j["secs"]]
+            done = [j["secs"] for j in self.jobs if j["state"] == "done" and not j.get("kind") and j["secs"]]
             run = next((j for j in self.jobs if j["state"] == "running"), None)
         last = done[-20:]
         avg = sum(last) / len(last) if last else None
@@ -165,7 +178,7 @@ class Jobs:
                 awake = True
             ev = self.cancels[j["id"]]
             base = Path(j["base"]) if j.get("base") else None
-            if j.get("kind") != "stem" and j.get("skip") and has_stems(self.eng.cfg, Path(j["path"]), base):
+            if j.get("kind") not in ("stem", "fx") and j.get("skip") and has_stems(self.eng.cfg, Path(j["path"]), base):
                 j.update(state="skipped", msg="Has stems already", folder=str(stems_dir(self.eng.cfg, Path(j["path"]), base)))
                 with self.lock:
                     self._save()
@@ -181,7 +194,12 @@ class Jobs:
 
             bind(cb, ev)
             try:
-                if j.get("kind") == "stem":
+                if j.get("kind") == "fx":
+                    from . import fx
+                    from .engine import _report
+                    fx.apply(Path(j["path"]), j["stem"], j["chain"], lambda f, m: _report(f, m))
+                    out = {"folder": j["path"], "stems": []}
+                elif j.get("kind") == "stem":
                     out = process_stem(self.eng, Path(j["path"]), j["stem"], j["model"], j["modelName"])
                 else:
                     out = self.eng.run(Path(j["path"]), j["steps"], base)

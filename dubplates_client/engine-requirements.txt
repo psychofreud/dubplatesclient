@@ -1,3 +1,4 @@
 # The stem engine. Installed on first start (bootstrap.py), after PyTorch; torch is held at the installed version.
 audio-separator[cpu]>=0.47
 imageio-ffmpeg>=0.6
+pedalboard>=0.9          # effects on stems + VST3 plugins (GPL-3.0)
