@@ -56,7 +56,7 @@ class Api:
 
     @safe
     def state(self):
-        return {"jobs": self._jobs.state(), "installs": self._inst.state()}
+        return {"jobs": self._jobs.state(), "installs": self._inst.state(), "queue": self._jobs.summary()}
 
     @safe
     def models(self, refresh=False):
@@ -97,11 +97,29 @@ class Api:
 
     # ---------- jobs ----------
     @safe
-    def add_jobs(self, paths, model_file, drum_model=""):
-        """drum_model: also split the Drums stem with this model (when the first model makes one)."""
+    def add_jobs(self, paths, model_file, drum_model="", skip=None):
+        """drum_model: also split the Drums stem with this model (when the first model makes one).
+        skip: skip tracks that have stems already (default: the setting)."""
         steps = self._steps(model_file, drum_model)
         self._cfg.update({"model": model_file, "drumSplit": drum_model or ""})
-        return {"added": self._jobs.add(list(paths or []), steps)}
+        return {"added": self._jobs.add(list(paths or []), steps, self._cfg["skipDone"] if skip is None else bool(skip))}
+
+    @safe
+    def preview_add(self, paths, mode=None, out_dir=None):
+        """Before a big add: how many tracks, how the folders look, and where the stems of a few of them would go
+        with this layout (mode / out_dir: the choice in the Add window, not saved yet)."""
+        from .layout import has_stems, scan, stems_dir, structure
+        found = scan(list(paths or []))
+        cfg = {**self._cfg.data, "outMode": mode or self._cfg["outMode"], "outDir": self._cfg["outDir"] if out_dir is None else out_dir}
+        pick = found[:2] + found[len(found) // 2:len(found) // 2 + 1] + found[-1:] if len(found) > 4 else found
+        seen, ex = set(), []
+        for f, base in pick:
+            if str(f) not in seen:
+                seen.add(str(f))
+                ex.append({"src": str(f), "out": str(stems_dir(cfg, f, base))})
+        return {"count": len(found), "structure": structure(found), "examples": ex,
+                "have": sum(1 for f, b in found if has_stems(cfg, f, b)) if len(found) <= 20000 else None,
+                "folders": len({f.parent for f, _ in found})}
 
     def _steps(self, model_file, drum_model=""):
         rows = {r["file"]: r for r in self.models()}
@@ -173,6 +191,16 @@ class Api:
     @safe
     def clear_jobs(self):
         self._jobs.clear()
+        return True
+
+    @safe
+    def pause_queue(self, on):
+        self._jobs.set_paused(on)
+        return True
+
+    @safe
+    def cancel_all(self):
+        self._jobs.cancel_all()
         return True
 
     # ---------- settings ----------

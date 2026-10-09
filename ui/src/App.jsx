@@ -25,9 +25,9 @@ export default function App() {
 }
 
 function Main({ hello }) {
-  const [page, setPage] = React.useState('separate');
+  const [page, setPage] = React.useState(() => new URLSearchParams(location.search).get('page') || 'separate');   // (?page=: for screenshots)
   const [cfg, setCfg] = React.useState(hello.config);
-  const [libSel, setLibSel] = React.useState(null);           // the open stem set: {id} or {folder} (from the queue)
+  const [libSel, setLibSel] = React.useState(() => { const s = new URLSearchParams(location.search).get('set'); return s ? { id: s } : null; });           // the open stem set: {id} or {folder} (from the queue)
   const openSet = folder => { setLibSel({ folder }); setPage('library'); };
   const [models, setModels] = React.useState([]);
   const [st, setSt] = React.useState({ jobs: [], installs: {} });
@@ -101,7 +101,7 @@ function Main({ hello }) {
       </aside>
       <main className="main">
         {!cfg ? <div className="center"><span className="spin" /> Starting the engine…</div> : (
-          page === 'separate' ? <Separate cfg={cfg} models={models} jobs={st.jobs} say={say} go={setPage} setConfig={setConfig} openSet={openSet} />
+          page === 'separate' ? <Separate cfg={cfg} models={models} jobs={st.jobs} queue={st.queue} say={say} go={setPage} setConfig={setConfig} openSet={openSet} />
             : page === 'library' ? <Library models={models} jobs={st.jobs} say={say} sel={libSel} setSel={setLibSel} go={setPage} />
             : page === 'models' ? <Models cfg={cfg} models={models} installs={st.installs} reload={loadModels} say={say} setConfig={setConfig} go={setPage} />
               : <Settings cfg={cfg} hello={hello} setConfig={setConfig} say={say} onUpdate={setUpd} />

@@ -277,15 +277,16 @@ class Engine:
         Sep.custom = self._custom_map()
         return self._sep
 
-    def out_folder(self, src: Path) -> Path:
-        base = Path(self.cfg["outDir"]) if self.cfg["outMode"] == "folder" and self.cfg["outDir"] else src.parent
-        folder = base / f"{safe_name(src.stem)} Stems"
+    def out_folder(self, src: Path, base: Path | None = None) -> Path:
+        """Where the stems of src go (layout.py); a second run: '<Track> Stems (2)' (unless Replace is on)."""
+        from .layout import stems_dir
+        folder = stems_dir(self.cfg, src, base)
         if self.cfg["overwrite"] or not folder.exists():
             return folder
         n = 2
-        while (base / f"{safe_name(src.stem)} Stems ({n})").exists():
+        while folder.with_name(f"{folder.name} ({n})").exists():
             n += 1
-        return base / f"{safe_name(src.stem)} Stems ({n})"
+        return folder.with_name(f"{folder.name} ({n})")
 
     def _split(self, src: Path, model_file: str, folder: Path, prefix: str, root: Path) -> list[dict]:
         """One model on one file: the stems go to folder as '<prefix> - <Stem>.<ext>'."""
@@ -313,7 +314,7 @@ class Engine:
             stems.append({"name": stem, "file": dst.relative_to(root).as_posix()})
         return stems
 
-    def run(self, src: Path, steps: list[dict]) -> dict:
+    def run(self, src: Path, steps: list[dict], base: Path | None = None) -> dict:
         """A chain of steps on one track. steps[0] = {model, name}: makes the stems of the track.
         Later steps = {model, name, on: "Drums"}: split that stem again; its parts go in '<Stem> parts/'
         and are listed under that stem ("parts") in dubplates.json. Progress via bind(), spread over the steps.
@@ -327,7 +328,7 @@ class Engine:
                     outer((i + frac) / n, f"{label}: {msg}" if msg and n > 1 else msg)
             return cb
 
-        folder = self.out_folder(src)
+        folder = self.out_folder(src, base)
         track = safe_name(src.stem)
         _local.cb = scoped(0, steps[0]["name"])
         try:

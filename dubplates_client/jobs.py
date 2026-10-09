@@ -2,20 +2,30 @@
 from __future__ import annotations
 
 import itertools
+import json
 import logging
+import os
 import threading
 import time
 import traceback
+from collections import Counter
 from pathlib import Path
 
+from .awake import set_awake
+from .config import app_dir
 from .engine import Cancelled, Engine, bind, process_stem
+from .layout import AUDIO, has_stems, scan, stems_dir
 
 log = logging.getLogger("dubplates")
-AUDIO = (".wav", ".flac", ".mp3", ".ogg", ".m4a", ".aac", ".aif", ".aiff", ".opus", ".wma")
 _ids = itertools.count(1)
 
 
 class Jobs:
+    """The stem queue: one job at a time, in order. Saved in <app dir>/queue.json: after a restart (or a crash) the
+    waiting jobs go on. While it works the computer stays awake (a whole library overnight)."""
+
+    KEEP = ("kind", "path", "base", "name", "steps", "modelName", "stem", "model", "skip", "added")
+
     def __init__(self, engine: Engine, library=None):
         self.eng = engine
         self.lib = library                              # finished sets go into the user's library
@@ -23,28 +33,56 @@ class Jobs:
         self.jobs: list[dict] = []
         self.cancels: dict[int, threading.Event] = {}
         self.wake = threading.Event()
+        self.paused = False
+        self.qfile = app_dir() / "queue.json"
+        self._restore()
         threading.Thread(target=self._loop, daemon=True, name="stems").start()
 
-    def add(self, paths: list[str], steps: list[dict]) -> int:
-        n, ids = 0, []
+    # ---------- saved queue ----------
+    def _save(self):
+        try:
+            todo = [{k: j[k] for k in self.KEEP if k in j} for j in self.jobs if j["state"] in ("queued", "running")]
+            tmp = self.qfile.with_suffix(".tmp")
+            tmp.write_text(json.dumps(todo), encoding="utf-8")
+            os.replace(tmp, self.qfile)
+        except OSError as e:
+            log.warning("queue save: %s", e)
+
+    def _restore(self):
+        try:
+            todo = json.loads(self.qfile.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        for x in todo if isinstance(todo, list) else []:
+            if not Path(x.get("path", "")).exists():
+                continue
+            jid = next(_ids)
+            self.cancels[jid] = threading.Event()
+            self.jobs.append({"added": time.time(), **x, "id": jid, "state": "queued", "pct": 0, "msg": "Waiting (from the last session)",
+                              "folder": "", "stems": [], "err": "", "secs": 0})
+        if self.jobs:
+            log.info("queue: %d jobs from the last session", len(self.jobs))
+
+    # ---------- add ----------
+    def add(self, paths: list[str], steps: list[dict], skip: bool = False) -> int:
+        """Every audio file in paths (folders: with all sub folders). skip: tracks that have stems already are skipped."""
+        found = scan(paths)
+        ids = []
         with self.lock:
-            for p in paths:
-                p = Path(p)
-                if p.is_dir():
-                    files = sorted(f for f in p.rglob("*") if f.suffix.lower() in AUDIO and " Stems" not in str(f.parent))
-                else:
-                    files = [p] if p.suffix.lower() in AUDIO and p.is_file() else []
-                for f in files:
-                    jid = next(_ids)
-                    self.cancels[jid] = threading.Event()
-                    self.jobs.append({"id": jid, "path": str(f), "name": f.name, "steps": steps, "modelName": " → ".join(s["name"] for s in steps),
-                                      "state": "queued", "pct": 0, "msg": "Waiting", "folder": "", "stems": [], "err": "",
-                                      "added": time.time(), "secs": 0})
-                    n += 1
-                    ids.append(jid)
+            have = {j["path"] for j in self.jobs if j["state"] in ("queued", "running") and j.get("kind") != "stem"}
+            for f, base in found:
+                if str(f) in have:
+                    continue                            # (already waiting)
+                jid = next(_ids)
+                self.cancels[jid] = threading.Event()
+                self.jobs.append({"id": jid, "path": str(f), "base": str(base), "name": f.name, "steps": steps, "skip": skip,
+                                  "modelName": " → ".join(s["name"] for s in steps), "state": "queued", "pct": 0, "msg": "Waiting",
+                                  "folder": "", "stems": [], "err": "", "added": time.time(), "secs": 0})
+                ids.append(jid)
             self.last_ids = ids
+            self._save()
         self.wake.set()
-        return n
+        return len(ids)
 
     def add_stem_work(self, folder: str, stem: str, model_file: str, model_name: str) -> int:
         """More work on one stem of a set (see engine.process_stem)."""
@@ -55,6 +93,7 @@ class Jobs:
                               "model": model_file, "modelName": model_name, "state": "queued", "pct": 0, "msg": "Waiting",
                               "folder": "", "stems": [], "err": "", "added": time.time(), "secs": 0})
             self.last_ids = [jid]
+            self._save()
         self.wake.set()
         return jid
 
@@ -70,6 +109,20 @@ class Jobs:
                     self.cancels[jid].set()
                     if j["state"] == "queued":
                         j["state"], j["msg"] = "cancelled", "Cancelled"
+            self._save()
+
+    def cancel_all(self):
+        with self.lock:
+            for j in self.jobs:
+                if j["state"] in ("queued", "running"):
+                    self.cancels[j["id"]].set()
+                    if j["state"] == "queued":
+                        j["state"], j["msg"] = "cancelled", "Cancelled"
+            self._save()
+
+    def set_paused(self, on: bool):
+        self.paused = bool(on)
+        self.wake.set()
 
     def clear(self):
         with self.lock:
@@ -77,20 +130,46 @@ class Jobs:
 
     def state(self) -> list[dict]:
         with self.lock:
-            return [dict(j) for j in self.jobs]
+            return [dict(j) for j in self.jobs[-400:]]       # (a whole library: the UI shows the last 400)
+
+    def summary(self) -> dict:
+        """For the queue header: counts and the time left (from the average time per track so far)."""
+        with self.lock:
+            c = Counter(j["state"] for j in self.jobs)
+            done = [j["secs"] for j in self.jobs if j["state"] == "done" and j.get("kind") != "stem" and j["secs"]]
+            run = next((j for j in self.jobs if j["state"] == "running"), None)
+        last = done[-20:]
+        avg = sum(last) / len(last) if last else None
+        left = c["queued"] + (1 if run else 0)
+        eta = round(avg * left - (run["secs"] if run else 0)) if avg and left else None
+        return {"total": len(self.jobs), "done": c["done"], "skipped": c["skipped"], "error": c["error"], "queued": c["queued"],
+                "running": bool(run), "paused": self.paused, "eta": max(0, eta) if eta is not None else None}
 
     def _next(self):
         with self.lock:
-            return next((j for j in self.jobs if j["state"] == "queued"), None)
+            return None if self.paused else next((j for j in self.jobs if j["state"] == "queued"), None)
 
     def _loop(self):
+        awake = False
         while True:
             j = self._next()
             if not j:
+                if awake:
+                    set_awake(False)
+                    awake = False
                 self.wake.wait(1)
                 self.wake.clear()
                 continue
+            if not awake:
+                set_awake(True)
+                awake = True
             ev = self.cancels[j["id"]]
+            base = Path(j["base"]) if j.get("base") else None
+            if j.get("kind") != "stem" and j.get("skip") and has_stems(self.eng.cfg, Path(j["path"]), base):
+                j.update(state="skipped", msg="Has stems already", folder=str(stems_dir(self.eng.cfg, Path(j["path"]), base)))
+                with self.lock:
+                    self._save()
+                continue
             j.update(state="running", msg="Starting…", pct=0)
             t0 = time.monotonic()
 
@@ -105,7 +184,7 @@ class Jobs:
                 if j.get("kind") == "stem":
                     out = process_stem(self.eng, Path(j["path"]), j["stem"], j["model"], j["modelName"])
                 else:
-                    out = self.eng.run(Path(j["path"]), j["steps"])
+                    out = self.eng.run(Path(j["path"]), j["steps"], base)
                 if self.lib:
                     try:
                         self.lib.add(out["folder"])
@@ -120,6 +199,8 @@ class Jobs:
             finally:
                 bind(None, None)
                 j["secs"] = round(time.monotonic() - t0)
+                with self.lock:
+                    self._save()
 
 
 class Installs:

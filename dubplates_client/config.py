@@ -30,7 +30,9 @@ def app_dir() -> Path:
 
 
 DEFAULTS = {
-    "outMode": "next",          # next = a "<Track> Stems" folder next to the track; folder = in outDir
+    "outMode": "next",          # where stems go (layout.py): next | mirror | flat (mirror and flat use outDir)
+    "layoutChosen": False,      # the user chose a layout (else the Add window asks first)
+    "skipDone": True,           # skip tracks that have stems already
     "outDir": "",
     "format": "FLAC",
     "mp3Bitrate": "320k",
@@ -54,6 +56,8 @@ class Config:
             saved = json.loads(self.path.read_text(encoding="utf-8"))
             if isinstance(saved, dict):
                 self.data.update({k: v for k, v in saved.items() if k in DEFAULTS})
+                if self.data["outMode"] == "folder":                # (0.1.x: "one folder" = flat)
+                    self.data["outMode"] = "flat"
         except (OSError, ValueError):
             pass
 
@@ -70,7 +74,7 @@ class Config:
         """Takes only known keys with valid values."""
         with self.lock:
             for k, v in (patch or {}).items():
-                if k == "outMode" and v in ("next", "folder"):
+                if k == "outMode" and v in ("next", "mirror", "flat"):
                     self.data[k] = v
                 elif k in ("outDir", "modelDir") and isinstance(v, str):
                     self.data[k] = v.strip()
@@ -84,7 +88,7 @@ class Config:
                     self.data[k] = v
                 elif k == "drumSplit" and isinstance(v, str):
                     self.data[k] = v
-                elif k in ("overwrite", "trustSite") and isinstance(v, bool):
+                elif k in ("overwrite", "trustSite", "layoutChosen", "skipDone") and isinstance(v, bool):
                     self.data[k] = v
                 elif k == "roots" and isinstance(v, dict):
                     self.data[k] = {str(a)[:200]: str(b) for a, b in v.items()}

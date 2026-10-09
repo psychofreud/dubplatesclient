@@ -19,7 +19,7 @@ export async function call(name, ...args) {
 }
 
 function fake() {
-  const cfg = { outMode: 'next', outDir: '', format: 'FLAC', mp3Bitrate: '320k', device: 'auto', modelDir: '', model: 'model_bs_roformer_ep_317_sdr_12.9755.ckpt', overwrite: false, custom: [], modelDirUsed: 'C:\\Users\\you\\AppData\\Roaming\\Dubplates Client\\models', appDir: '' };
+  const cfg = { outMode: 'next', outDir: '', layoutChosen: false, skipDone: true, format: 'FLAC', mp3Bitrate: '320k', device: 'auto', modelDir: '', model: 'model_bs_roformer_ep_317_sdr_12.9755.ckpt', overwrite: false, custom: [], modelDirUsed: 'C:\\Users\\you\\AppData\\Roaming\\Dubplates Client\\models', appDir: '' };
   const m = (group, file, name, stems, extra = {}) => ({ group, file, name, stems, files: [file], installed: false, arch: 'MDXC', sdr: null, desc: '', suggested: group !== 'all', known: true, ...extra });
   const models = [
     m('vocals', 'model_bs_roformer_ep_317_sdr_12.9755.ckpt', 'BS-Roformer 1297', ['Vocals', 'Instrumental'], { installed: true, badge: 'Start here', sdr: 16.45, desc: 'Vocals + instrumental. Clean and fast. The best all-round model.' }),
@@ -47,7 +47,7 @@ function fake() {
   }
   return {
     hello: async () => ({ version: '0.1.0 (preview)', device: { kind: 'cuda', name: 'NVIDIA GeForce RTX 3080', memGB: 10 }, config: cfg, platform: 'browser' }),
-    state: async () => { const j = jobs[1]; if (j.pct < 100) j.pct = Math.min(99, j.pct + 1.5); return { jobs, installs: {} }; },
+    state: async () => { if (location.search.includes('shot')) return { jobs: [], installs: {} }; const qs = { total: 342, done: 120, skipped: 12, error: 1, queued: 208, running: true, paused: false, eta: 7400 }; const j = jobs[1]; if (j.pct < 100) j.pct = Math.min(99, j.pct + 1.5); return { jobs, installs: {}, queue: qs }; },
     models: async () => models, install: ok, cancel_install: ok, remove: ok, add_custom: async () => ({ error: 'Not in preview' }),
     add_jobs: async p => ({ added: p.length }), cancel_job: ok, clear_jobs: ok,
     set_config: async p => Object.assign(cfg, p), pick_files: async () => [], pick_folder: async () => '', pick_model_file: async () => '',
@@ -63,7 +63,10 @@ function fake() {
         stems: ['Vocals', 'Drums', 'Bass', 'Guitar', 'Piano', 'Other'].map(n => ({ name: n, file: `Burial - Archangel - ${n}.flac`, ...(n === 'Drums' ? { parts: ['Kick', 'Snare', 'Toms', 'Hi-Hat', 'Ride', 'Crash'].map(p => ({ name: p, file: `Drums parts/x - ${p}.flac` })) } : {}) })) } }),
     peaks: async path => { let s = 0; for (const ch of path) s = (s * 31 + ch.charCodeAt(0)) % 9973; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
       const env = 0.3 + rnd() * 0.6; return { dur: 238, peaks: Array.from({ length: 1600 }, (_, i) => { const a = env * (0.35 + 0.65 * Math.abs(Math.sin(i / (20 + rnd() * 3)))) * (0.6 + rnd() * 0.4) * (i > 1500 ? (1600 - i) / 100 : 1); return [-a, a]; }) }; },
+    preview_add: async (paths, mode, outDir) => { const d = mode === 'next' || !outDir ? 'D:\\Music\\Dub' : (mode === 'mirror' ? outDir + '\\Dub' : outDir);
+      return { count: 342, folders: 18, structure: 'shared', have: 12, examples: ['King Tubby - Dub Fi Gwan', 'Scientist - Plague of Zombies', 'Mala - Alicia', 'Burial - Archangel'].map(n => ({ src: 'D:\\Music\\Dub\\' + n + '.mp3', out: d + '\\' + n + ' Stems' })) }; },
+    pause_queue: ok, cancel_all: ok,
     library_add: async () => ({ cancelled: true }), library_remove: ok, stem_work: async () => ({ job: 9 }),
-    check_update: async () => ({ current: '0.1.1', latest: '0.1.2', newer: true, url: 'https://github.com/psychofreud/dubplatesclient/releases/' }),
+    check_update: async () => (location.search.includes('shot') ? { newer: false } : { current: '0.1.1', latest: '0.1.2', newer: true, url: 'https://github.com/psychofreud/dubplatesclient/releases/' }),
   };
 }

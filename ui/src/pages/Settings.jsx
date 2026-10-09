@@ -2,6 +2,7 @@ import React from 'react';
 import { call } from '../api.js';
 import { Seg } from '../ui.jsx';
 import { IcFolder } from '../icons.jsx';
+import { LAYOUTS } from '../AddWindow.jsx';
 
 export default function Settings({ cfg, hello, setConfig, say, onUpdate }) {
   const [checking, setChecking] = React.useState(false);
@@ -13,7 +14,7 @@ export default function Settings({ cfg, hello, setConfig, say, onUpdate }) {
     } catch (e) { say('Could not check: ' + e.message, 'err'); }
     setChecking(false);
   };
-  const browse = async key => { const f = await call('pick_folder'); if (f) setConfig({ [key]: f, ...(key === 'outDir' ? { outMode: 'folder' } : {}) }); };
+  const browse = async (key, extra = {}) => { const f = await call('pick_folder'); if (f) setConfig({ [key]: f, ...extra }); };
   const dev = hello?.device;
   return (
     <div className="page">
@@ -21,13 +22,16 @@ export default function Settings({ cfg, hello, setConfig, say, onUpdate }) {
 
       <section className="card set">
         <h2>Output</h2>
-        <Field label="Where stems go">
-          <Seg value={cfg.outMode} onChange={v => (v === 'folder' && !cfg.outDir ? browse('outDir') : setConfig({ outMode: v }))}
-            options={[['next', 'Next to the track'], ['folder', 'One folder']]} />
+        <Field label="Where stems go" hint={(LAYOUTS.find(l => l.id === cfg.outMode) || LAYOUTS[0]).text}>
+          <Seg value={cfg.outMode} onChange={v => (v !== 'next' && !cfg.outDir ? browse('outDir', { outMode: v, layoutChosen: true }) : setConfig({ outMode: v, layoutChosen: true }))}
+            options={LAYOUTS.map(l => [l.id, l.id === 'next' ? 'Next to each track' : l.id === 'mirror' ? 'Stems folder, same sub folders' : 'Stems folder, all together'])} />
         </Field>
-        {cfg.outMode === 'folder' && (
-          <Field label="Folder"><div className="in-row"><input readOnly value={cfg.outDir} /><button className="btn sm" onClick={() => browse('outDir')}><IcFolder size={14} /> Browse</button></div></Field>
+        {cfg.outMode !== 'next' && (
+          <Field label="Stems folder"><div className="in-row"><input readOnly value={cfg.outDir} /><button className="btn sm" onClick={() => browse('outDir')}><IcFolder size={14} /> Browse</button></div></Field>
         )}
+        <Field label="Skip tracks with stems" hint="When you add a folder again, tracks that have stems already are not done again.">
+          <Seg value={cfg.skipDone ? 'y' : 'n'} onChange={v => setConfig({ skipDone: v === 'y' })} options={[['y', 'Skip them'], ['n', 'Make them again']]} />
+        </Field>
         <Field label="Folder name" hint="Each track gets its own folder."><code>My Track Stems / My Track - Vocals.{cfg.format.toLowerCase()}</code></Field>
         <Field label="When the folder is already there">
           <Seg value={cfg.overwrite ? 'y' : 'n'} onChange={v => setConfig({ overwrite: v === 'y' })} options={[['n', 'Make a new one (2)'], ['y', 'Replace the files']]} />
