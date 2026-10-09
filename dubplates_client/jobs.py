@@ -25,7 +25,7 @@ class Jobs:
         threading.Thread(target=self._loop, daemon=True, name="stems").start()
 
     def add(self, paths: list[str], steps: list[dict]) -> int:
-        n = 0
+        n, ids = 0, []
         with self.lock:
             for p in paths:
                 p = Path(p)
@@ -40,8 +40,15 @@ class Jobs:
                                       "state": "queued", "pct": 0, "msg": "Waiting", "folder": "", "stems": [], "err": "",
                                       "added": time.time(), "secs": 0})
                     n += 1
+                    ids.append(jid)
+            self.last_ids = ids
         self.wake.set()
         return n
+
+    def get(self, jid: int) -> dict | None:
+        with self.lock:
+            j = next((j for j in self.jobs if j["id"] == jid), None)
+            return dict(j) if j else None
 
     def cancel(self, jid: int):
         with self.lock:

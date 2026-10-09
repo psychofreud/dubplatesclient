@@ -51,8 +51,13 @@ export default function Settings({ cfg, hello, setConfig, say, onUpdate }) {
 
       <section className="card set">
         <h2>dubplates.net</h2>
-        <Field label="Account" hint="Soon: link this computer to your dubplates.net account and load stems straight into the mixer.">
-          <button className="btn" disabled>Link this computer (coming soon)</button>
+        <Field label="Make stems from the site" hint="The Live mix on dubplates.net sends tracks here and loads the stems back into the deck.">
+          <Seg value={cfg.trustSite ? 'y' : 'n'} onChange={v => setConfig({ trustSite: v === 'y' })} options={[['n', 'Ask me first'], ['y', 'Start without asking']]} />
+        </Field>
+        <Field label="Music folders" hint="Where the site's music folders are on this computer.">
+          {Object.keys(cfg.roots || {}).length ? <div className="roots">{Object.entries(cfg.roots).map(([k, v]) => (
+            <div key={k} className="in-row"><code title={v}>{k} → {v}</code><button className="btn ghost sm" onClick={() => { const r = { ...cfg.roots }; delete r[k]; setConfig({ roots: r }); }}>Forget</button></div>
+          ))}</div> : <small className="dim">None yet: the first “Make stems” from the site asks.</small>}
         </Field>
       </section>
 

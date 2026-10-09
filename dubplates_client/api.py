@@ -97,18 +97,71 @@ class Api:
     @safe
     def add_jobs(self, paths, model_file, drum_model=""):
         """drum_model: also split the Drums stem with this model (when the first model makes one)."""
+        steps = self._steps(model_file, drum_model)
+        self._cfg.update({"model": model_file, "drumSplit": drum_model or ""})
+        return {"added": self._jobs.add(list(paths or []), steps)}
+
+    def _steps(self, model_file, drum_model=""):
         rows = {r["file"]: r for r in self.models()}
         m = rows.get(model_file)
         if not m or not m["installed"]:
-            return {"error": "Install the model first (Models page)"}
+            raise ValueError("Install a model first (Models page)")
         steps = [{"model": model_file, "name": m["name"]}]
         d = rows.get(drum_model) if drum_model else None
         if drum_model and (not d or not d["installed"]):
-            return {"error": "Install the drum model first (Models page)"}
+            raise ValueError("Install the drum model first (Models page)")
         if d and any(s.lower() == "drums" for s in m["stems"]):
             steps.append({"model": drum_model, "name": d["name"], "on": "Drums"})
-        self._cfg.update({"model": model_file, "drumSplit": drum_model or ""})
-        return {"added": self._jobs.add(list(paths or []), steps)}
+        return steps
+
+    # ---------- jobs from dubplates.net (bridge.py) ----------
+    def _start_job(self, file: str) -> dict:
+        """A job for the site: the model (and drum split) chosen in the client."""
+        rows = [r for r in self.models() if r["installed"]]
+        model = self._cfg["model"] if any(r["file"] == self._cfg["model"] for r in rows) else (rows[0]["file"] if rows else "")
+        self._jobs.add([file], self._steps(model, self._cfg["drumSplit"]))
+        return {"job": self._jobs.last_ids[0]}
+
+    def _job(self, jid):
+        return self._jobs.get(jid)
+
+    def _ask_site(self, rid):
+        """The site asks for a job: the window comes to the front and the UI asks (LinkAsk.jsx)."""
+        cb = getattr(self, "_front", None)
+        if cb:
+            cb()
+
+    @safe
+    def site_pending(self):
+        """Site requests that wait for the user (oldest first)."""
+        s = getattr(self, "_site", None)
+        if not s:
+            return []
+        with s.lock:
+            return [dict(r) for r in s.items.values() if r["state"] in ("asking", "needRoot")]
+
+    @safe
+    def site_accept(self, rid, trust=False):
+        if trust:
+            self._cfg.update({"trustSite": True})
+        self._site.accept(int(rid))
+        return True
+
+    @safe
+    def site_cancel(self, rid):
+        self._site.cancel(int(rid))
+        return True
+
+    @safe
+    def site_root(self, rid):
+        """The user shows where the site's music folder is; then the request asks to start."""
+        r = self._site.get(int(rid))
+        out = self.set_root(r["root"], r["path"])
+        if out.get("file"):
+            r.update(file=out["file"], state="asking")
+            if self._cfg["trustSite"]:
+                self._site.accept(r["id"])
+        return out
 
     @safe
     def cancel_job(self, jid):
@@ -171,7 +224,11 @@ class Api:
         if action != "separate":
             return {"action": "open"}
         q = parse_qs(u.query)
-        root, rel = (q.get("root") or [""])[0][:200], (q.get("path") or [""])[0][:1000]
+        return self._link_info((q.get("root") or [""])[0], (q.get("path") or [""])[0])
+
+    def _link_info(self, root: str, rel: str) -> dict:
+        """A track in the site's music folder <root> (its name in the browser) at <rel>: where is it on this computer?"""
+        root, rel = root[:200], rel[:1000]
         parts = [p for p in rel.replace("\\", "/").split("/") if p]
         if not root or not parts or any(p in (".", "..") or ":" in p for p in parts) or Path(parts[-1]).suffix.lower() not in AUDIO:
             return {"action": "error", "error": "This link is not a track in your music folder."}

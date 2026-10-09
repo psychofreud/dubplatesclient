@@ -214,6 +214,8 @@ option,optgroup{background:#15161a;color:var(--ink);}
 .modal .sub{margin:0 0 6px;}
 .modal .btn.pri{align-self:flex-start;}
 .modal .mpk{min-width:0;}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2);cursor:pointer;margin-top:4px;}
+.check input{accent-color:var(--accent);width:16px;height:16px;}
 .modal-btns{display:flex;gap:8px;margin-top:8px;}
 /* first-start setup */
 .app.solo{display:block;}

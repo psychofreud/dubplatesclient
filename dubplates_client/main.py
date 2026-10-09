@@ -151,6 +151,20 @@ def main():
             pass
 
     listen(on_link)
+    if ready:                                       # dubplates.net finds the client here (bridge.py)
+        from .bridge import serve
+
+        def front():
+            try:
+                win.restore()
+                win.show()
+                win.on_top = True
+                win.on_top = False
+                win.evaluate_js("window.__dpSite && window.__dpSite()")
+            except Exception:  # noqa: BLE001
+                pass
+        api._front = front
+        serve(api)
 
     def on_drop(e):
         paths = [f.get("pywebviewFullPath") for f in (e.get("dataTransfer") or {}).get("files", []) if f.get("pywebviewFullPath")]
