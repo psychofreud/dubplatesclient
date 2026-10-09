@@ -5,7 +5,10 @@ dubplates.net site (and local development of it) may use the bridge. Nothing her
 
   GET  /v1/ping            {app, version, gpu}
   POST /v1/separate        {root, path}  -> {req}       (root = the site's music folder name, path = the file in it)
+  POST /v1/upload?name=<file name>   body = the audio   -> {req}   (a track that is not in a music folder: dropped
+                           into the site, or from the site's library. Saved in <app dir>/From dubplates.net)
   GET  /v1/req/<id>        {state, pct, msg, folder, stems, rel, err}
+  GET  /v1/req/<id>/stem/<n>  the audio of stem n (when done): the site loads it into the deck
                            state: asking | needRoot | queued | running | done | error | cancelled
 """
 from __future__ import annotations
@@ -13,7 +16,9 @@ from __future__ import annotations
 import itertools
 import json
 import logging
+import mimetypes
 import threading
+from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -23,6 +28,7 @@ log = logging.getLogger("dubplates")
 PORTS = (47821, 47822, 47823)              # the site tries these in order
 ORIGINS = {"https://dubplates.net", "https://www.dubplates.net",
            "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8765", "http://127.0.0.1:8765"}
+MAX_UPLOAD = 1 << 30                       # 1 GB
 _ids = itertools.count(1)
 
 
@@ -38,9 +44,16 @@ class Requests:
         info = self.api._link_info(root, path)
         if info.get("action") == "error":
             raise ValueError(info["error"])
+        return self._add({"root": info["root"], "path": info["path"], "name": info["name"], "file": info.get("file", ""),
+                          "state": "needRoot" if info.get("needRoot") else "asking"})
+
+    def new_file(self, file: Path) -> dict:
+        """A track the site sent (upload): it is already on this computer."""
+        return self._add({"root": "", "path": "", "name": file.name, "file": str(file), "state": "asking"})
+
+    def _add(self, r: dict) -> dict:
         rid = next(_ids)
-        r = {"id": rid, "root": info["root"], "path": info["path"], "name": info["name"], "file": info.get("file", ""),
-             "state": "needRoot" if info.get("needRoot") else "asking", "job": None, "err": ""}
+        r.update(id=rid, job=None, err="")
         with self.lock:
             self.items[rid] = r
         if r["state"] == "asking" and self.api._cfg["trustSite"]:
@@ -66,6 +79,14 @@ class Requests:
         r = self.get(rid)
         if r and r["state"] in ("asking", "needRoot"):
             r["state"] = "cancelled"
+
+    def stem_file(self, rid: int, n: int) -> Path | None:
+        r = self.get(rid)
+        j = r and r["job"] and self.api._job(r["job"])
+        if not j or j["state"] != "done" or not 0 <= n < len(j["stems"]):
+            return None
+        f = (Path(j["folder"]) / j["stems"][n]["file"]).resolve()
+        return f if f.is_file() and Path(j["folder"]).resolve() in f.parents else None
 
     def status(self, rid: int) -> dict | None:
         r = self.get(rid)
@@ -112,6 +133,18 @@ def serve(api) -> int | None:
             self.end_headers()
             self.wfile.write(data)
 
+        def _file(self, f: Path):
+            self.send_response(200)
+            self.send_header("Content-Type", mimetypes.guess_type(f.name)[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(f.stat().st_size))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Access-Control-Allow-Origin", self._origin())
+            self.send_header("Vary", "Origin")
+            self.end_headers()
+            with open(f, "rb") as fh:
+                while chunk := fh.read(1 << 20):
+                    self.wfile.write(chunk)
+
         def do_OPTIONS(self):                            # CORS preflight (+ Chrome's local network access)
             if not self._origin():
                 self.send_response(403)
@@ -132,6 +165,15 @@ def serve(api) -> int | None:
             if self.path == "/v1/ping":
                 d = getattr(api, "_device", None) or {}
                 return self._send(200, {"app": "dubplates-client", "version": VERSION, "gpu": d.get("name", "")})
+            m = self.path.split("/")
+            if len(m) == 6 and m[1:3] == ["v1", "req"] and m[4] == "stem":
+                try:
+                    f = reqs.stem_file(int(m[3]), int(m[5]))
+                except ValueError:
+                    f = None
+                if not f:
+                    return self._send(404, {"error": "No such stem"})
+                return self._file(f)
             if self.path.startswith("/v1/req/"):
                 try:
                     st = reqs.status(int(self.path.rsplit("/", 1)[1]))
@@ -140,9 +182,47 @@ def serve(api) -> int | None:
                 return self._send(200, st) if st else self._send(404, {"error": "Unknown request"})
             self._send(404, {"error": "Not found"})
 
+        def _save_upload(self, name: str) -> Path:
+            from .config import app_dir
+            from .engine import safe_name
+            from .jobs import AUDIO
+            name = safe_name(Path(name.replace("\\", "/")).name)[:150]
+            if Path(name).suffix.lower() not in AUDIO:
+                raise ValueError("Send an audio file (WAV, FLAC, MP3, M4A, OGG, AIFF)")
+            n = int(self.headers.get("Content-Length") or 0)
+            if not 0 < n <= MAX_UPLOAD:
+                raise ValueError("The file is empty or bigger than 1 GB")
+            d = app_dir() / "From dubplates.net"
+            d.mkdir(exist_ok=True)
+            f, k = d / name, 2
+            while f.exists():
+                f, k = d / f"{Path(name).stem} ({k}){Path(name).suffix}", k + 1
+            tmp = f.with_name(f.name + ".part")
+            left = n
+            with open(tmp, "wb") as fh:
+                while left > 0:
+                    chunk = self.rfile.read(min(left, 1 << 20))
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    left -= len(chunk)
+            if left:
+                tmp.unlink(missing_ok=True)
+                raise ValueError("The upload stopped")
+            tmp.replace(f)
+            return f
+
         def do_POST(self):
             if not self._origin():
                 return self._send(403, {"error": "Only dubplates.net"})
+            u = urlsplit(self.path)
+            if u.path == "/v1/upload":
+                try:
+                    f = self._save_upload((parse_qs(u.query).get("name") or [""])[0])
+                    r = reqs.new_file(f)
+                    return self._send(200, {"req": r["id"], "state": r["state"]})
+                except Exception as e:  # noqa: BLE001
+                    return self._send(400, {"error": str(e)})
             if self.path != "/v1/separate":
                 return self._send(404, {"error": "Not found"})
             try:

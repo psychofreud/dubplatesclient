@@ -65,7 +65,7 @@ export default function LinkAsk({ cfg, models, setConfig, say, go }) {
         <button className="icon-btn modal-x" title="Cancel" onClick={close}><IcX size={14} /></button>
         <h2><IcStems size={18} /> Make stems</h2>
         <p className="modal-track">{ask.name}</p>
-        <p className="sub">dubplates.net asks to make stems of this track, from your music folder “{ask.root}”.</p>
+        <p className="sub">{ask.root ? <>dubplates.net asks to make stems of this track, from your music folder “{ask.root}”.</> : <>dubplates.net sent this track to make stems (the stems go back into the deck).</>}</p>
         {ask.needRoot ? (
           <>
             <div className="note">
