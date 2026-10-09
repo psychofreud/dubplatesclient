@@ -33,6 +33,8 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
+; tell Windows that the dubplates:// link type changed (else Explorer / browsers may not see it until a sign-out)
+ChangesAssociations=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Make a desktop icon"; GroupDescription: "Icons:"
