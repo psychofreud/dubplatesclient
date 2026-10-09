@@ -36,6 +36,15 @@ function fake() {
     { id: 3, name: 'Mala - Changes.wav', path: '', modelName: 'BS-Roformer 1297', state: 'queued', pct: 0, msg: 'Waiting', stems: [], secs: 0 },
   ];
   const ok = async () => true;
+  if (location.search.includes('setup')) {          // preview of the first-start page: http://localhost:5174/?setup
+    let pct = 0, on = false;
+    return {
+      hello: async () => ({ version: '0.1.0 (preview)', platform: 'browser', setup: { gpu: 'NVIDIA GeForce RTX 3080', recommended: 'cuda', options: [{ id: 'cuda', label: 'NVIDIA GPU (fast)', size: 'about 3 GB' }, { id: 'cpu', label: 'CPU only (slow)', size: 'about 300 MB' }] } }),
+      setup_start: async () => { on = true; return true; },
+      setup_state: async () => { if (on) pct = Math.min(100, pct + 2); return { running: on && pct < 100, done: pct >= 100, error: '', step: pct < 80 ? 'Downloading PyTorch' : 'Installing the stem engine', pct, msg: `torch-2.11.0+cu128-cp311-cp311-win_amd64.whl · ${Math.round(pct * 30)} of 3000 MB`, log: ['> pip install torch==2.11.0 torchaudio==2.11.0', 'Collecting torch==2.11.0'] }; },
+      restart: ok, open_url: ok,
+    };
+  }
   return {
     hello: async () => ({ version: '0.1.0 (preview)', device: { kind: 'cuda', name: 'NVIDIA GeForce RTX 3080', memGB: 10 }, config: cfg, platform: 'browser' }),
     state: async () => { const j = jobs[1]; if (j.pct < 100) j.pct = Math.min(99, j.pct + 1.5); return { jobs, installs: {} }; },

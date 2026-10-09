@@ -1,7 +1,6 @@
-# PyTorch: run.bat / run.sh install it first (CUDA build on Windows/Linux with an NVIDIA GPU; macOS uses the Apple GPU).
-audio-separator[gpu]>=0.47; sys_platform != "darwin"
-audio-separator>=0.47; sys_platform == "darwin"
+# Run from source. PyTorch: run.bat / run.sh install it first (CUDA build with an NVIDIA GPU; macOS uses the Apple GPU).
+# The Windows installer ships only the window part (pywebview, requests, pyyaml); the engine comes on first start.
 pywebview>=6.2
-imageio-ffmpeg>=0.6     # ffmpeg for computers that do not have it
 requests
 pyyaml
+-r dubplates_client/engine-requirements.txt

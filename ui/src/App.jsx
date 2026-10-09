@@ -4,6 +4,7 @@ import { IcStems, IcModels, IcSettings, IcChip, IcLink } from './icons.jsx';
 import Separate from './pages/Separate.jsx';
 import Models from './pages/Models.jsx';
 import Settings from './pages/Settings.jsx';
+import Setup from './pages/Setup.jsx';
 
 const PAGES = [
   { id: 'separate', label: 'Make stems', Icon: IcStems },
@@ -11,10 +12,18 @@ const PAGES = [
   { id: 'settings', label: 'Settings', Icon: IcSettings },
 ];
 
+// First: hello. No engine yet (first start) = the setup page, else the app.
 export default function App() {
-  const [page, setPage] = React.useState('separate');
   const [hello, setHello] = React.useState(null);
-  const [cfg, setCfg] = React.useState(null);
+  const [err, setErr] = React.useState('');
+  React.useEffect(() => { call('hello').then(setHello).catch(e => setErr(e.message)); }, []);
+  if (!hello) return <div className="app solo"><div className="bg" /><div className="center">{err ? <span className="err">{err}</span> : <><span className="spin" /> Starting…</>}</div></div>;
+  return hello.setup ? <Setup hello={hello} /> : <Main hello={hello} />;
+}
+
+function Main({ hello }) {
+  const [page, setPage] = React.useState('separate');
+  const [cfg, setCfg] = React.useState(hello.config);
   const [models, setModels] = React.useState([]);
   const [st, setSt] = React.useState({ jobs: [], installs: {} });
   const [toast, setToast] = React.useState(null);
@@ -26,10 +35,7 @@ export default function App() {
     try { setModels(await call('models', refresh)); } catch (e) { say(e.message, 'err'); }
   }, [say]);
 
-  React.useEffect(() => {
-    call('hello').then(h => { setHello(h); setCfg(h.config); }).catch(e => say(e.message, 'err'));
-    loadModels();
-  }, [loadModels, say]);
+  React.useEffect(() => { loadModels(); }, [loadModels]);
 
   // live state: jobs + installs (fast while something runs)
   const busy = st.jobs.some(j => j.state === 'running' || j.state === 'queued') || Object.values(st.installs).some(i => !i.done);
