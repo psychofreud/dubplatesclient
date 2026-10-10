@@ -135,6 +135,8 @@ function Custom({ models, say, installs }) {
   );
 }
 
+// a path that breaks only after \ or / (not inside a name)
+const wrapPath = s => String(s || '').split(/(?<=[\\/])/).map((x, i) => <React.Fragment key={i}>{x}<wbr /></React.Fragment>);
 const mb = b => (b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b >= 1e6 ? Math.round(b / 1e6) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' kB');
 // Plugins: folders in <app dir>/plugins with a plugin.json. They work on one stem (Library › a set › ＋ › Plugin).
 function Plugins({ say }) {
@@ -147,6 +149,11 @@ function Plugins({ say }) {
   const wasGoing = React.useRef(false);
   React.useEffect(() => { if (wasGoing.current && !going) loadCat(); wasGoing.current = going; }, [going, loadCat]);
   const get = async id => { try { await call('plugin_get', id); load(); } catch (e) { say(e.message, 'err'); } };
+  const remove = async x => {
+    const dl = (x.models || []).filter(y => y.have).reduce((a, y) => a + (y.size || 0), 0);
+    if (!window.confirm(`Remove “${x.name}” from this computer?${dl ? ` Its models (${mb(dl)}) are deleted too.` : ''}`)) return;
+    try { await call('plugin_remove', x.id); say(`${x.name} removed`, 'ok'); load(); loadCat(); } catch (e) { say(e.message, 'err'); }
+  };
   React.useEffect(() => { if (!going) return undefined; const t = setInterval(load, 700); return () => clearInterval(t); }, [going, load]);
   const add = async () => { try { const r = await call('plugin_add'); if (!r.cancelled) { say(`${r.name} added`, 'ok'); load(); } } catch (e) { say(e.message, 'err'); } };
   const install = async id => { try { await call('plugin_install', id); load(); } catch (e) { say(e.message, 'err'); } };
@@ -155,15 +162,15 @@ function Plugins({ say }) {
     <section className="msec">
       <h2>Plugins</h2>
       <p className="sub">Tools that work on one stem, for example a vocal repair. Use them in the Library: open a set, click <b>＋</b> on a stem, then <b>Plugin</b>.
-        A plugin is a folder (with a <code>plugin.json</code>) in <code>{p.dir}</code>. Only add plugins from people you trust: a plugin is a program.</p>
+        A plugin is a folder with a <code className="nw">plugin.json</code> in <code className="path">{wrapPath(p.dir)}</code>. Only add plugins from people you trust: a plugin is a program.</p>
       <div className="modal-btns" style={{ marginBottom: 14 }}>
         <button className="btn sm" onClick={add}><IcPlus size={14} /> Add a plugin folder…</button>
         <button className="btn sm" onClick={() => call('plugin_folder')}><IcFolder size={14} /> Open the plugins folder</button>
         <button className="btn ghost sm" onClick={load}><IcRefresh size={14} /> Look again</button>
       </div>
-      {cat && (cat.error ? <div className="note">Plugins on dubplates.net: could not get the list ({cat.error}).</div> : cat.items.filter(x => !x.installed || x.newer).length > 0 && <>
+      {cat && (cat.error ? <div className="note">Plugins on dubplates.net: could not get the list ({cat.error}).</div> : cat.items.filter(x => !x.installed || x.newer || x.local).length > 0 && <>
         <h2 style={{ marginTop: 6 }}>From dubplates.net</h2>
-        <div className="grid" style={{ marginBottom: 18 }}>{cat.items.filter(x => !x.installed || x.newer).map(x => {
+        <div className="grid" style={{ marginBottom: 18 }}>{cat.items.filter(x => !x.installed || x.newer || x.local).map(x => {
           const g = (p.getting || {})[x.id] || p.items.find(y => y.id === x.id)?.install, run = g && !g.done;
           const dl = (x.models || []).reduce((a, y) => a + (y.size || 0), 0);
           return (
@@ -179,7 +186,7 @@ function Plugins({ say }) {
                 <span className="mono dim">{x.installed ? `You have ${x.installed}` : `${mb(x.size || 0)}${dl ? ` + models ${mb(dl)}` : ''}`}</span>
                 <div className="mc-btns">
                   {run ? <div className="dl"><div className="bar"><i style={{ width: Math.max(3, g.pct) + '%' }} /></div><span className="dl-msg">{g.msg}</span></div>
-                    : <button className="btn pri sm" disabled={!cat.canInstall} title={cat.canInstall ? '' : 'Update the client first'} onClick={() => get(x.id)}><IcDown size={14} /> {x.newer ? 'Update' : 'Install'}</button>}
+                    : <button className="btn pri sm" disabled={!cat.canInstall} title={cat.canInstall ? '' : 'Update the client first'} onClick={() => get(x.id)}><IcDown size={14} /> {x.newer ? 'Update' : x.local ? 'Replace my copy' : 'Install'}</button>}
                 </div>
               </div>
             </div>
@@ -200,13 +207,14 @@ function Plugins({ say }) {
             {x.fromSite && <span className="pmeta">From dubplates.net (signed)</span>}
             {x.problem && <p className="err"><IcWarn size={14} /> {x.problem}</p>}
             {inst?.err && <p className="err">{inst.err}</p>}
-            <span className="pdir mono">{x.dir}</span>
+            <span className="pdir mono">{wrapPath(x.dir)}</span>
             <div className="mc-foot">
               <span className="mono dim">{x.problem ? 'Not ready' : x.ready ? 'Ready' : x.packages !== 'ok' && x.modelsState !== 'ok' ? 'Needs packages + models' : x.packages !== 'ok' ? 'Needs packages' : 'Needs models'}</span>
               <div className="mc-btns">
                 {run ? <div className="dl"><div className="bar"><i style={{ width: Math.max(3, inst.pct) + '%' }} /></div><span className="dl-msg">{inst.msg}</span></div>
                   : !x.problem && !x.ready && <button className="btn pri sm" onClick={() => install(x.id)}><IcDown size={14} /> Install{(s => s ? ` (${mb(s)})` : '')(x.models.filter(y => !y.have).reduce((a, y) => a + (y.size || 0), 0))}</button>}
-                <button className="btn ghost sm" onClick={() => call('open_path', x.dir)}><IcFolder size={14} /></button>
+                <button className="btn ghost sm" title="Open its folder" onClick={() => call('open_path', x.dir)}><IcFolder size={14} /></button>
+                {!run && <button className="btn ghost sm" title="Remove this plugin" onClick={() => remove(x)}><IcTrash size={14} /></button>}
               </div>
             </div>
           </div>

@@ -525,6 +525,14 @@ class Api:
         return True
 
     @safe
+    def plugin_remove(self, pid):
+        from . import plugins
+        if any(j.get("plugin") == pid and j["state"] in ("queued", "running") for j in self._jobs.state()):
+            return {"error": "This plugin has a job in the queue: wait for it, or cancel it"}
+        plugins.remove(pid)
+        return True
+
+    @safe
     def plugin_add(self):
         from . import plugins
         f = self.pick_folder()

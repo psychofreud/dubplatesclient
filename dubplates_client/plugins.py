@@ -477,6 +477,16 @@ def install_catalog(pid: str, report=None) -> dict:
     return get(pid)
 
 
+def remove(pid: str) -> None:
+    """Deletes the plugin's folder (code, models, packages)."""
+    if not ID_RE.match(str(pid)) or pid in (".", ".."):
+        raise ValueError("Unknown plugin")
+    d = plugins_dir() / pid
+    if not d.is_dir() or d.resolve().parent != plugins_dir().resolve():
+        raise ValueError("Unknown plugin")
+    shutil.rmtree(d)
+
+
 def add_folder(src: str) -> dict:
     """Copies a plugin folder (with plugin.json) into the plugins folder."""
     s = Path(src)

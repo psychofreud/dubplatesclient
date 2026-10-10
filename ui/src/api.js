@@ -87,7 +87,7 @@ function fake() {
         time: 'About 70 s per song on a good GPU (DirectX 12), about 15 times longer on the CPU. Needs about 6.5 GB of GPU memory.',
         inputs: [{ id: 'reference', type: 'audio', label: 'Reference vocal', remember: true, help: 'A clean, dry studio vocal (any song, any words). The plugin learns from it how a good recording sounds.' }],
         options: [{ id: 'ml', type: 'bool', label: 'ML dereverb (recommended)', default: true }, { id: 'mono', type: 'bool', label: 'Mono output', default: false }] }] }),
-    plugin_catalog: async () => ({ canInstall: true, items: [{ id: 'crowd_cut', name: 'Crowd cut', version: '1.0', author: 'Anders', for: ['vocals'], description: 'Removes crowd noise and claps from a live recording stem.', size: 48000, models: [{ file: '.models/crowd.onnx', name: 'Crowd model', size: 210000000 }], installed: null, newer: false }] }), plugin_get: ok,
+    plugin_catalog: async () => ({ canInstall: true, items: [{ id: 'crowd_cut', name: 'Crowd cut', version: '1.0', author: 'Anders', for: ['vocals'], description: 'Removes crowd noise and claps from a live recording stem.', size: 48000, models: [{ file: '.models/crowd.onnx', name: 'Crowd model', size: 210000000 }], installed: null, newer: false }] }), plugin_get: ok, plugin_remove: ok,
     plugin_install: ok, plugin_add: async () => ({ cancelled: true }), plugin_folder: ok, plugin_run: async () => ({ job: 10 }), pick_audio: async () => '',
     check_update: async () => (location.search.includes('shot') ? { newer: false } : { current: '0.1.1', latest: '0.1.2', newer: true, url: 'https://github.com/psychofreud/dubplatesclient/releases/' }),
   };
