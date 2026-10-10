@@ -41,6 +41,11 @@ from .config import app_dir
 
 log = logging.getLogger("dubplates")
 ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,60}$")
+SITE = "https://dubplates.net"
+# Public keys (Ed25519, base64) of the people who may publish plugins on dubplates.net (tools/plugin_pack.py keygen).
+# A package from the site is installed only when its signature matches one of these: a changed file on the
+# server can not reach this computer.
+TRUST_KEYS: list[str] = []
 
 
 def plugins_dir() -> Path:
@@ -74,6 +79,7 @@ def _manifest(d: Path) -> dict | None:
     m["models"] = [{**x, "have": _model_ok(d, x)} for x in m.get("models") or [] if isinstance(x, dict) and x.get("file")]
     m["modelsState"] = "ok" if all(x["have"] for x in m["models"]) else "missing"
     m["ready"] = not m["problem"] and m["packages"] == "ok" and m["modelsState"] == "ok"
+    m["fromSite"] = bool(origin(d))
     return m
 
 
@@ -370,6 +376,103 @@ def apply(folder: Path, stem: str, m: dict, inputs: dict, options: dict, report,
         x, sr, _ = fx.read(keep)
         fx.write_like(f, x, sr, sf.info(str(orig)))
     return {"file": str(f), "warnings": r["warnings"]}
+
+
+# ---------- plugins from dubplates.net (signed) ----------
+def _ver(v) -> tuple:
+    return tuple(int(x) for x in re.findall(r"\d+", str(v or "0")))
+
+
+def origin(d: Path) -> dict:
+    try:
+        return json.loads((Path(d) / ".origin.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def catalog() -> list[dict]:
+    """The plugins published on dubplates.net, with what is installed here."""
+    import requests
+    r = requests.get(SITE + "/api/public/client/plugins", timeout=15)
+    r.raise_for_status()
+    have = {m["id"]: m for m in scan()}
+    out = []
+    for x in r.json().get("items") or []:
+        if not isinstance(x, dict) or not ID_RE.match(str(x.get("id", ""))):
+            continue
+        h = have.get(x["id"])
+        x["installed"] = h.get("version") if h else None
+        x["newer"] = bool(h) and _ver(x.get("version")) > _ver(h.get("version"))
+        x["local"] = bool(h) and not origin(Path(h["dir"]))            # (a folder the user copied: not replaced)
+        out.append(x)
+    return out
+
+
+def verify(data: bytes, sig_b64: str) -> bool:
+    import base64
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    try:
+        sig = base64.b64decode(sig_b64.strip(), validate=True)
+    except ValueError:
+        return False
+    for k in TRUST_KEYS:
+        try:
+            Ed25519PublicKey.from_public_bytes(base64.b64decode(k)).verify(sig, data)
+            return True
+        except (InvalidSignature, ValueError):
+            continue
+    return False
+
+
+def install_catalog(pid: str, report=None) -> dict:
+    """Downloads a plugin from dubplates.net, checks its signature, and puts it in the plugins folder (an older
+    version is replaced; its downloaded models and packages stay when they are still the same)."""
+    import io
+    import requests
+    import zipfile
+    if not TRUST_KEYS:
+        raise ValueError("This version of the client can not check plugins from the site yet")
+    x = next((x for x in catalog() if x["id"] == pid), None)
+    if not x:
+        raise ValueError("That plugin is not on dubplates.net (any more)")
+    if report:
+        report(0.02, "Downloading the plugin…")
+    base = f"{SITE}/api/public/client/plugins/{pid}/{pid}-{x['version']}.zip"
+    z = requests.get(base, timeout=120)
+    z.raise_for_status()
+    s = requests.get(base + ".sig", timeout=30)
+    s.raise_for_status()
+    if not verify(z.content, s.text):
+        raise ValueError("The plugin's signature is not valid: it was not installed")
+    zf = zipfile.ZipFile(io.BytesIO(z.content))
+    m = json.loads(zf.read("plugin.json").decode("utf-8"))
+    if m.get("id") != pid:
+        raise ValueError("The package is not this plugin")
+    for y in m.get("models") or []:
+        if not str(y.get("url", "")).startswith("https://") or not y.get("sha256"):
+            raise ValueError("A model of this plugin has no https link or no SHA-256")
+    tmp = plugins_dir() / f".new-{pid}"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir()
+    for n in zf.namelist():
+        f = (tmp / n).resolve()
+        if tmp.resolve() not in f.parents:
+            raise ValueError("Bad file names in the package")
+    zf.extractall(tmp)
+    dst = plugins_dir() / pid
+    if dst.exists():                                    # keep what is still good: packages and models
+        if (dst / ".deps").is_dir():
+            shutil.move(str(dst / ".deps"), str(tmp / ".deps"))
+        for y in m.get("models") or []:
+            old = dst / y["file"]
+            if old.is_file() and old.stat().st_size == int(y.get("size") or -1):
+                (tmp / y["file"]).parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(old), str(tmp / y["file"]))
+        shutil.rmtree(dst)
+    (tmp / ".origin.json").write_text(json.dumps({"from": SITE, "version": m.get("version"), "sha256": x.get("sha256")}), encoding="utf-8")
+    tmp.rename(dst)
+    return get(pid)
 
 
 def add_folder(src: str) -> dict:

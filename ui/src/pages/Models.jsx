@@ -139,9 +139,14 @@ const mb = b => (b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round(b / 1e6) +
 // Plugins: folders in <app dir>/plugins with a plugin.json. They work on one stem (Library › a set › ＋ › Plugin).
 function Plugins({ say }) {
   const [p, setP] = React.useState(null);
+  const [cat, setCat] = React.useState(null);              // the plugins on dubplates.net
   const load = React.useCallback(() => call('plugins').then(setP).catch(e => say(e.message, 'err')), [say]);
-  React.useEffect(() => { load(); }, [load]);
-  const going = p && p.items.some(x => x.install && !x.install.done);
+  const loadCat = React.useCallback(() => call('plugin_catalog').then(setCat).catch(e => setCat({ error: e.message, items: [] })), []);
+  React.useEffect(() => { load(); loadCat(); }, [load, loadCat]);
+  const going = p && (p.items.some(x => x.install && !x.install.done) || Object.values(p.getting || {}).some(g => !g.done));
+  const wasGoing = React.useRef(false);
+  React.useEffect(() => { if (wasGoing.current && !going) loadCat(); wasGoing.current = going; }, [going, loadCat]);
+  const get = async id => { try { await call('plugin_get', id); load(); } catch (e) { say(e.message, 'err'); } };
   React.useEffect(() => { if (!going) return undefined; const t = setInterval(load, 700); return () => clearInterval(t); }, [going, load]);
   const add = async () => { try { const r = await call('plugin_add'); if (!r.cancelled) { say(`${r.name} added`, 'ok'); load(); } } catch (e) { say(e.message, 'err'); } };
   const install = async id => { try { await call('plugin_install', id); load(); } catch (e) { say(e.message, 'err'); } };
@@ -156,7 +161,33 @@ function Plugins({ say }) {
         <button className="btn sm" onClick={() => call('plugin_folder')}><IcFolder size={14} /> Open the plugins folder</button>
         <button className="btn ghost sm" onClick={load}><IcRefresh size={14} /> Look again</button>
       </div>
-      {!p.items.length && <div className="note">No plugins yet. Copy a plugin folder into the plugins folder, then click “Look again”.</div>}
+      {cat && (cat.error ? <div className="note">Plugins on dubplates.net: could not get the list ({cat.error}).</div> : cat.items.filter(x => !x.installed || x.newer).length > 0 && <>
+        <h2 style={{ marginTop: 6 }}>From dubplates.net</h2>
+        <div className="grid" style={{ marginBottom: 18 }}>{cat.items.filter(x => !x.installed || x.newer).map(x => {
+          const g = (p.getting || {})[x.id] || p.items.find(y => y.id === x.id)?.install, run = g && !g.done;
+          const dl = (x.models || []).reduce((a, y) => a + (y.size || 0), 0);
+          return (
+            <div key={x.id} className="mcard pcard">
+              <div className="mc-top"><b>{x.name}</b><span className="mpk-n">{x.version}</span>{x.newer && <span className="badge">Update</span>}</div>
+              <p>{x.description}</p>
+              {x.for?.length > 0 && <span className="pmeta">For: {x.for.slice(0, 3).join(', ')}{x.author ? ` · by ${x.author}` : ''}</span>}
+              {x.time && <span className="pmeta">{x.time}</span>}
+              {x.models?.length > 0 && <span className="pmeta">Models: {x.models.map(y => `${y.name || y.file.split('/').pop()} (${mb(y.size || 0)})`).join(' · ')}</span>}
+              {x.local && <p className="err"><IcWarn size={14} /> You have your own copy of this plugin ({x.installed}). Installing replaces it.</p>}
+              {g?.err && <p className="err">{g.err}</p>}
+              <div className="mc-foot">
+                <span className="mono dim">{x.installed ? `You have ${x.installed}` : `${mb(x.size || 0)}${dl ? ` + models ${mb(dl)}` : ''}`}</span>
+                <div className="mc-btns">
+                  {run ? <div className="dl"><div className="bar"><i style={{ width: Math.max(3, g.pct) + '%' }} /></div><span className="dl-msg">{g.msg}</span></div>
+                    : <button className="btn pri sm" disabled={!cat.canInstall} title={cat.canInstall ? '' : 'Update the client first'} onClick={() => get(x.id)}><IcDown size={14} /> {x.newer ? 'Update' : 'Install'}</button>}
+                </div>
+              </div>
+            </div>
+          );
+        })}</div>
+        <h2>On this computer</h2>
+      </>)}
+      {!p.items.length && <div className="note">No plugins on this computer yet. Install one from dubplates.net, or copy a plugin folder into the plugins folder and click “Look again”.</div>}
       <div className="grid">{p.items.map(x => {
         const inst = x.install, run = inst && !inst.done;
         return (
@@ -166,6 +197,7 @@ function Plugins({ say }) {
             {x.for?.length > 0 && <span className="pmeta">For: {x.for.slice(0, 3).join(', ')}{x.author ? ` · by ${x.author}` : ''}</span>}
             {x.time && <span className="pmeta">{x.time}</span>}
             {x.models?.length > 0 && <span className="pmeta">Models: {x.models.map(y => `${y.name || y.file.split('/').pop()}${y.size ? ` (${mb(y.size)})` : ''}${y.have ? ' ✓' : ''}`).join(' · ')}</span>}
+            {x.fromSite && <span className="pmeta">From dubplates.net (signed)</span>}
             {x.problem && <p className="err"><IcWarn size={14} /> {x.problem}</p>}
             {inst?.err && <p className="err">{inst.err}</p>}
             <span className="pdir mono">{x.dir}</span>

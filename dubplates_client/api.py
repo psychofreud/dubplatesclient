@@ -471,7 +471,7 @@ class Api:
         from . import plugins
         inst = getattr(self, "_pinst", {})
         return {"dir": str(plugins.plugins_dir()), "items": [{**m, "install": inst.get(m["id"])} for m in plugins.scan()],
-                "saved": self._cfg["pluginInputs"]}
+                "saved": self._cfg["pluginInputs"], "getting": {k: v for k, v in inst.items() if not v["done"] or v["err"]}}
 
     @safe
     def plugin_install(self, pid):
@@ -489,6 +489,34 @@ class Api:
                 plugins.install(pid, lambda f, m: it.update(pct=round(f * 100), msg=m))
             except Exception as e:  # noqa: BLE001
                 log.exception("plugin install %s", pid)
+                it.update(err=str(e)[:400], msg="Failed")
+            finally:
+                it["done"] = True
+
+        threading.Thread(target=work, daemon=True).start()
+        return True
+
+    @safe
+    def plugin_catalog(self):
+        from . import plugins
+        return {"items": plugins.catalog(), "canInstall": bool(plugins.TRUST_KEYS)}
+
+    @safe
+    def plugin_get(self, pid):
+        """Install (or update) a plugin from dubplates.net, then its packages and models."""
+        from . import plugins
+        self._pinst = getattr(self, "_pinst", {})
+        cur = self._pinst.get(pid)
+        if cur and not cur["done"]:
+            return True
+        it = self._pinst[pid] = {"pct": 0, "msg": "Starting…", "err": "", "done": False}
+
+        def work():
+            try:
+                plugins.install_catalog(pid, lambda f, m: it.update(pct=round(f * 100), msg=m))
+                plugins.install(pid, lambda f, m: it.update(pct=round(5 + f * 95), msg=m))
+            except Exception as e:  # noqa: BLE001
+                log.exception("plugin get %s", pid)
                 it.update(err=str(e)[:400], msg="Failed")
             finally:
                 it["done"] = True

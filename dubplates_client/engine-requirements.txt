@@ -2,3 +2,4 @@
 audio-separator[cpu]>=0.47
 imageio-ffmpeg>=0.6
 pedalboard>=0.9          # effects on stems + VST3 plugins (GPL-3.0)
+cryptography>=42        # checks the signature of plugins from dubplates.net

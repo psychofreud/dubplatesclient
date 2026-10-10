@@ -89,3 +89,22 @@ plugins/
 - On macOS `onnxruntime-directml` becomes `onnxruntime` (DirectML is only for Windows).
 
 Only add plugins from people you trust: a plugin is a program with the same rights as the client.
+
+## Publish a plugin on dubplates.net (admin)
+
+Users then find it in the client under **Models › Plugins › From dubplates.net** (Install / Update).
+
+1. **Once: the signing key.** `python client	ools\plugin_pack.py keygen` makes
+   `%USERPROFILE%\.dubplates\plugin-signing.key` (secret, keep a backup) and prints the public key. The public key
+   goes into the client (`TRUST_KEYS` in `dubplates_client/plugins.py`): the client installs only packages signed with it.
+2. **Models online.** Big files are not in the package. Put them where anybody can download them, for example a
+   GitHub release (`gh release create <tag> <files> --repo <owner>/<models repo>`, up to 2 GB per file) or a
+   Hugging Face model repo. Write each link in plugin.json (`models[].url`). Respect the models' licenses.
+3. **Pack and sign.** Raise `version` in plugin.json, then `python client	ools\plugin_pack.py pack <plugin folder>`.
+   With the model files in the folder, it fills in `size` and `sha256`. It writes `plugin-packages\<id>-<version>.zip`
+   and `.zip.sig` next to the folder.
+4. **Upload and publish.** dubplates.net › Settings › Admin › **Client plugins**: choose both files, Upload, Publish.
+   One version per plugin is published; Hide takes it away from the list (installed copies stay).
+
+A package changed on the server (or a different key) is refused by the client. The models are checked by their
+SHA-256, which is in the signed plugin.json.
