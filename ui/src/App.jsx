@@ -29,6 +29,8 @@ function Main({ hello }) {
   const [cfg, setCfg] = React.useState(hello.config);
   const [libSel, setLibSel] = React.useState(() => { const s = new URLSearchParams(location.search).get('set'); return s ? { id: s } : null; });           // the open stem set: {id} or {folder} (from the queue)
   const openSet = folder => { setLibSel({ folder }); setPage('library'); };
+  const [sub, setSub] = React.useState('');
+  const go = React.useCallback((p, s = '') => { setSub(s); setPage(p); }, []);
   const [models, setModels] = React.useState([]);
   const [st, setSt] = React.useState({ jobs: [], installs: {} });
   const [toast, setToast] = React.useState(null);
@@ -75,7 +77,7 @@ function Main({ hello }) {
         <div className="brand"><img src="assets/logo-dark.png" alt="dubplates.net" /><span>Client</span></div>
         <nav>
           {PAGES.map(({ id, label, Icon }) => (
-            <button key={id} className={'nav' + (page === id ? ' on' : '')} onClick={() => setPage(id)}>
+            <button key={id} className={'nav' + (page === id ? ' on' : '')} onClick={() => go(id)}>
               <Icon /><span>{label}</span>
               {id === 'separate' && running > 0 && <em className="pill">{running}</em>}
             </button>
@@ -101,13 +103,13 @@ function Main({ hello }) {
       </aside>
       <main className="main">
         {!cfg ? <div className="center"><span className="spin" /> Starting the engine…</div> : (
-          page === 'separate' ? <Separate cfg={cfg} models={models} jobs={st.jobs} queue={st.queue} say={say} go={setPage} setConfig={setConfig} openSet={openSet} />
-            : page === 'library' ? <Library models={models} jobs={st.jobs} say={say} sel={libSel} setSel={setLibSel} go={setPage} />
-            : page === 'models' ? <Models cfg={cfg} models={models} installs={st.installs} reload={loadModels} say={say} setConfig={setConfig} go={setPage} />
+          page === 'separate' ? <Separate cfg={cfg} models={models} jobs={st.jobs} queue={st.queue} say={say} go={go} setConfig={setConfig} openSet={openSet} />
+            : page === 'library' ? <Library models={models} jobs={st.jobs} say={say} sel={libSel} setSel={setLibSel} go={go} />
+            : page === 'models' ? <Models key={'m' + sub} sub={sub} cfg={cfg} models={models} installs={st.installs} reload={loadModels} say={say} setConfig={setConfig} go={go} />
               : <Settings cfg={cfg} hello={hello} setConfig={setConfig} say={say} onUpdate={setUpd} />
         )}
       </main>
-      {cfg && <LinkAsk cfg={cfg} models={models} setConfig={setConfig} say={say} go={setPage} />}
+      {cfg && <LinkAsk cfg={cfg} models={models} setConfig={setConfig} say={say} go={go} />}
       {toast && <div className={'toast ' + toast.kind} key={toast.t} onClick={() => setToast(null)}>{toast.text}</div>}
     </div>
   );

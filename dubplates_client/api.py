@@ -453,6 +453,115 @@ class Api:
         from . import fx
         return fx.vst_editor(path, state or {})
 
+    # ---------- plugins (plugins.py) ----------
+    @safe
+    def plugins(self):
+        from . import plugins
+        inst = getattr(self, "_pinst", {})
+        return {"dir": str(plugins.plugins_dir()), "items": [{**m, "install": inst.get(m["id"])} for m in plugins.scan()],
+                "saved": self._cfg["pluginInputs"]}
+
+    @safe
+    def plugin_install(self, pid):
+        """Installs the packages of a plugin (in a thread; plugins() shows the progress)."""
+        from . import plugins
+        plugins.get(pid)
+        self._pinst = getattr(self, "_pinst", {})
+        cur = self._pinst.get(pid)
+        if cur and not cur["done"]:
+            return True
+        it = self._pinst[pid] = {"pct": 0, "msg": "Starting…", "err": "", "done": False}
+
+        def work():
+            try:
+                plugins.install_deps(pid, lambda f, m: it.update(pct=round(f * 100), msg=m))
+            except Exception as e:  # noqa: BLE001
+                log.exception("plugin install %s", pid)
+                it.update(err=str(e)[:400], msg="Failed")
+            finally:
+                it["done"] = True
+
+        threading.Thread(target=work, daemon=True).start()
+        return True
+
+    @safe
+    def plugin_add(self):
+        from . import plugins
+        f = self.pick_folder()
+        if not f:
+            return {"cancelled": True}
+        return plugins.add_folder(f)
+
+    @safe
+    def plugin_folder(self):
+        from . import plugins
+        return self.open_path(str(plugins.plugins_dir()))
+
+    @safe
+    def plugin_run(self, lid, stem, pid, inputs=None, options=None):
+        from . import plugins
+        m = plugins.get(pid)
+        if m.get("problem"):
+            return {"error": m["problem"]}
+        if m["packages"] != "ok":
+            return {"error": "Install the plugin's packages first (Models › Plugins)"}
+        inputs, options = dict(inputs or {}), dict(options or {})
+        saved = dict(self._cfg["pluginInputs"])
+        keep = {i["id"] for i in m.get("inputs") or [] if i.get("remember")} | {o["id"] for o in m.get("options") or []}
+        saved[pid] = {**saved.get(pid, {}), **{k: v for k, v in {**inputs, **options}.items() if k in keep}}
+        self._cfg.update({"pluginInputs": saved})
+        return {"job": self._jobs.add_plugin(str(self._lib.folder(lid)), stem, m, inputs, options)}
+
+    @safe
+    def pick_audio(self):
+        r = self._window.create_file_dialog(webview.FileDialog.OPEN, allow_multiple=False,
+                                            file_types=("Audio files (" + ";".join("*" + e for e in AUDIO) + ")", "All files (*.*)"))
+        return (r[0] if isinstance(r, (list, tuple)) else r) if r else ""
+
+    # ---------- send a stem set to a deck on dubplates.net (bridge.py: the site asks /v1/inbox) ----------
+    @safe
+    def site_link(self):
+        """Is a dubplates.net mixer (signed in) open in a browser on this computer? (It asks the bridge every 2 s.)"""
+        import time as _t
+        seen = getattr(self, "_site_seen", 0)
+        return {"connected": _t.time() - seen < 6, "user": getattr(self, "_site_user", "")}
+
+    @safe
+    def send_deck(self, lid, deck):
+        import time as _t
+        if deck not in ("A", "B"):
+            return {"error": "Deck A or B"}
+        if not self.site_link()["connected"]:
+            return {"error": "Open the dubplates.net mixer (signed in) in your browser on this computer first."}
+        d = self._lib.detail(lid)
+        f, meta = Path(d["folder"]), d["meta"]
+        stems = [{"name": s["name"], "file": s["file"]} for s in meta["stems"] if (f / s["file"]).is_file()]
+        if not stems:
+            return {"error": "This set has no stem files"}
+        title = Path((meta.get("source") or {}).get("name") or f.name).stem
+        self._sends = [x for x in getattr(self, "_sends", []) if _t.time() - x["at"] < 600]
+        sid = max([x["id"] for x in self._sends], default=0) + 1
+        self._sends.append({"id": sid, "deck": deck, "title": title, "folder": str(f), "stems": stems, "at": _t.time(), "taken": False})
+        return {"sent": sid}
+
+    def _inbox(self, user: str = "") -> list[dict]:
+        import time as _t
+        self._site_seen, self._site_user = _t.time(), user[:80]
+        out = []
+        for x in getattr(self, "_sends", []):
+            if not x["taken"]:
+                x["taken"] = True
+                out.append({k: x[k] for k in ("id", "deck", "title", "stems")})
+        return out
+
+    def _send_file(self, sid: int, n: int) -> Path | None:
+        x = next((x for x in getattr(self, "_sends", []) if x["id"] == sid), None)
+        if not x or not 0 <= n < len(x["stems"]):
+            return None
+        base = Path(x["folder"]).resolve()
+        f = (base / x["stems"][n]["file"]).resolve()
+        return f if f.is_file() and base in f.parents else None
+
     @safe
     def check_update(self):
         from . import updates

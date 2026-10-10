@@ -79,6 +79,14 @@ function fake() {
     fx_module: async k => ({ type: k, on: true, p: {} }), fx_preset: async () => [], fx_preview: async () => ({ media: null }), fx_apply: ok, fx_restore: ok,
     vst_params: async () => ({ mix: { value: 0.5, min: 0, max: 1, label: '%' }, delay_ms: { value: 120, min: 0, max: 1000, label: 'ms' }, feedback: { value: 0.4, min: 0, max: 1, label: '' }, density: { value: 0.6, min: 0, max: 1, label: '' } }),
     library_add: async () => ({ cancelled: true }), library_remove: ok, stem_work: async () => ({ job: 9 }),
+    site_link: async () => ({ connected: !location.search.includes('nosite') }), send_deck: async () => ({ sent: 1 }),
+    plugins: async () => ({ dir: 'C:\\Users\\you\\AppData\\Roaming\\Dubplates Client\\plugins', saved: { vocal_repair: { reference: 'D:\\Vocals\\clean studio vocal.flac', ml: true } }, items: [
+      { id: 'vocal_repair', name: 'Vocal repair', version: '1.0', author: 'Anders', for: ['vocals'], packages: location.search.includes('nopkg') ? 'missing' : 'ok', problem: '', dir: 'C:\\Users\\you\\AppData\\Roaming\\Dubplates Client\\plugins\\vocal_repair',
+        description: 'Repairs an AI-made vocal: removes artificial reverb, noise and harsh tone. A clean studio vocal (from any song) is the quality target. Same length and loudness, so it replaces the stem in place.',
+        time: 'About 70 s per song on a good GPU (DirectX 12), about 15 times longer on the CPU. Needs about 6.5 GB of GPU memory.',
+        inputs: [{ id: 'reference', type: 'audio', label: 'Reference vocal', remember: true, help: 'A clean, dry studio vocal (any song, any words). The plugin learns from it how a good recording sounds.' }],
+        options: [{ id: 'ml', type: 'bool', label: 'ML dereverb (recommended)', default: true }, { id: 'mono', type: 'bool', label: 'Mono output', default: false }] }] }),
+    plugin_install: ok, plugin_add: async () => ({ cancelled: true }), plugin_folder: ok, plugin_run: async () => ({ job: 10 }), pick_audio: async () => '',
     check_update: async () => (location.search.includes('shot') ? { newer: false } : { current: '0.1.1', latest: '0.1.2', newer: true, url: 'https://github.com/psychofreud/dubplatesclient/releases/' }),
   };
 }

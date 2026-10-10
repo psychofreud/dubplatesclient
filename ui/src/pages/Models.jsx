@@ -1,6 +1,6 @@
 import React from 'react';
 import { call } from '../api.js';
-import { IcDown, IcTrash, IcRefresh, IcPlus, IcSearch, IcCheck, IcX } from '../icons.jsx';
+import { IcDown, IcTrash, IcRefresh, IcPlus, IcSearch, IcCheck, IcX, IcFolder, IcWarn } from '../icons.jsx';
 import { StemChips, Seg } from '../ui.jsx';
 
 const SECTIONS = [
@@ -9,8 +9,8 @@ const SECTIONS = [
   ['clean', 'Clean-up', 'Run these on a stem to remove reverb, noise, crowd or bleed.'],
 ];
 
-export default function Models({ cfg, models, installs, reload, say, setConfig, go }) {
-  const [tab, setTab] = React.useState('suggested');
+export default function Models({ sub, cfg, models, installs, reload, say, setConfig, go }) {
+  const [tab, setTab] = React.useState(sub || 'suggested');
   const [q, setQ] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const refresh = async () => { setBusy(true); await reload(true); setBusy(false); say('Model list updated', 'ok'); };
@@ -22,7 +22,7 @@ export default function Models({ cfg, models, installs, reload, say, setConfig, 
         <div><h1>Models</h1><p>{n} installed · models are saved in <code>{cfg.modelDirUsed}</code></p></div>
         <button className="btn" onClick={refresh} disabled={busy}><IcRefresh size={16} className={busy ? 'rot' : ''} /> Check for new models</button>
       </header>
-      <Seg value={tab} onChange={setTab} options={[['suggested', 'Suggested'], ['all', 'All models'], ['custom', 'Custom']]} />
+      <Seg value={tab} onChange={setTab} options={[['suggested', 'Suggested'], ['all', 'All models'], ['custom', 'Custom'], ['plugins', 'Plugins']]} />
 
       {tab === 'suggested' && SECTIONS.map(([g, title, sub]) => (
         <section key={g} className="msec">
@@ -42,6 +42,7 @@ export default function Models({ cfg, models, installs, reload, say, setConfig, 
       )}
 
       {tab === 'custom' && <Custom models={models.filter(m => m.custom)} say={say} reload={reload} installs={installs} />}
+      {tab === 'plugins' && <Plugins say={say} />}
     </div>
   );
 }
@@ -130,6 +131,53 @@ function Custom({ models, say, installs }) {
         <button className="btn pri" disabled={busy || !f.name || !f.model || !f.config} onClick={add}>{busy ? 'Downloading…' : 'Add model'}</button>
       </div>
       {models.length > 0 && <div className="rows">{models.map(m => <Row key={m.file} m={m} inst={installs[m.file]} say={say} />)}</div>}
+    </section>
+  );
+}
+
+// Plugins: folders in <app dir>/plugins with a plugin.json. They work on one stem (Library › a set › ＋ › Plugin).
+function Plugins({ say }) {
+  const [p, setP] = React.useState(null);
+  const load = React.useCallback(() => call('plugins').then(setP).catch(e => say(e.message, 'err')), [say]);
+  React.useEffect(() => { load(); }, [load]);
+  const going = p && p.items.some(x => x.install && !x.install.done);
+  React.useEffect(() => { if (!going) return undefined; const t = setInterval(load, 700); return () => clearInterval(t); }, [going, load]);
+  const add = async () => { try { const r = await call('plugin_add'); if (!r.cancelled) { say(`${r.name} added`, 'ok'); load(); } } catch (e) { say(e.message, 'err'); } };
+  const install = async id => { try { await call('plugin_install', id); load(); } catch (e) { say(e.message, 'err'); } };
+  if (!p) return <section className="msec"><span className="spin" /></section>;
+  return (
+    <section className="msec">
+      <h2>Plugins</h2>
+      <p className="sub">Tools that work on one stem, for example a vocal repair. Use them in the Library: open a set, click <b>＋</b> on a stem, then <b>Plugin</b>.
+        A plugin is a folder (with a <code>plugin.json</code>) in <code>{p.dir}</code>. Only add plugins from people you trust: a plugin is a program.</p>
+      <div className="modal-btns" style={{ marginBottom: 14 }}>
+        <button className="btn sm" onClick={add}><IcPlus size={14} /> Add a plugin folder…</button>
+        <button className="btn sm" onClick={() => call('plugin_folder')}><IcFolder size={14} /> Open the plugins folder</button>
+        <button className="btn ghost sm" onClick={load}><IcRefresh size={14} /> Look again</button>
+      </div>
+      {!p.items.length && <div className="note">No plugins yet. Copy a plugin folder into the plugins folder, then click “Look again”.</div>}
+      <div className="grid">{p.items.map(x => {
+        const inst = x.install, run = inst && !inst.done;
+        return (
+          <div key={x.id} className={'mcard pcard' + (!x.problem && x.packages === 'ok' ? ' have' : '')}>
+            <div className="mc-top"><b>{x.name}</b>{x.version && <span className="mpk-n">{x.version}</span>}{!x.problem && x.packages === 'ok' && <span className="ok-dot" title="Ready"><IcCheck size={13} /></span>}</div>
+            <p>{x.description}</p>
+            {x.for?.length > 0 && <span className="pmeta">For: {x.for.slice(0, 3).join(', ')}{x.author ? ` · by ${x.author}` : ''}</span>}
+            {x.time && <span className="pmeta">{x.time}</span>}
+            {x.problem && <p className="err"><IcWarn size={14} /> {x.problem}</p>}
+            {inst?.err && <p className="err">{inst.err}</p>}
+            <span className="pdir mono">{x.dir}</span>
+            <div className="mc-foot">
+              <span className="mono dim">{x.problem ? 'Not ready' : x.packages === 'ok' ? 'Ready' : 'Needs packages'}</span>
+              <div className="mc-btns">
+                {run ? <div className="dl"><div className="bar"><i style={{ width: Math.max(3, inst.pct) + '%' }} /></div><span className="dl-msg">{inst.msg}</span></div>
+                  : !x.problem && x.packages !== 'ok' && <button className="btn pri sm" onClick={() => install(x.id)}><IcDown size={14} /> Install packages</button>}
+                <button className="btn ghost sm" onClick={() => call('open_path', x.dir)}><IcFolder size={14} /></button>
+              </div>
+            </div>
+          </div>
+        );
+      })}</div>
     </section>
   );
 }

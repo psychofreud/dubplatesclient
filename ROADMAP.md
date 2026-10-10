@@ -12,6 +12,7 @@
 - "Link this computer": the client shows a code, the user confirms it on dubplates.net, the client gets a device token.
 - `dubplates://` links: "Make stems" on the site opens the client with the track.
 - The mixer loads a `Stems` folder (browser folder picker), or the client uploads stems to the user's library.
+- [x] "Send to deck A / B" in the client's Library: a signed-in mixer asks the bridge (`/v1/inbox`) and loads the stems (0.1.8).
 - `dubplates.json` → `source.sha256` tells the site "this track has stems".
 
 ## Phase 3: model list from the site
@@ -22,6 +23,7 @@
 ## Phase 4: tools on stems
 - [x] Effects chain per stem: bleed reduction, repair, gate, compression, EQ, filters, limiter, gain (0.1.7).
 - [x] VST3 plugins in the chain (pedalboard), plugin window or sliders.
+- [x] Plugins: a folder with plugin.json, its own process and packages; the result replaces the stem (0.1.8, PLUGINS.md).
 - [ ] De-comb (the old Stemmer's AI-upsampling comb cut).
 - [ ] Effects on drum parts and on "more work" results; combine two models (ensemble).
 - [ ] AU plugins on macOS.

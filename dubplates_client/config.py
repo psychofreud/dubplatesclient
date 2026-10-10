@@ -44,6 +44,7 @@ DEFAULTS = {
     "custom": [],               # custom models: [{file, yaml, name, stems, url, yamlUrl, sha256}]
     "trustSite": False,         # True = jobs from dubplates.net start without asking
     "roots": {},                # dubplates.net music folders: {folder name in the browser: full path on this computer}
+    "pluginInputs": {},         # the last files and options per plugin: {plugin id: {input or option id: value}}
 }
 
 
@@ -92,6 +93,8 @@ class Config:
                     self.data[k] = v
                 elif k == "roots" and isinstance(v, dict):
                     self.data[k] = {str(a)[:200]: str(b) for a, b in v.items()}
+                elif k == "pluginInputs" and isinstance(v, dict):
+                    self.data[k] = {str(a)[:60]: dict(b) for a, b in v.items() if isinstance(b, dict)}
                 elif k == "custom" and isinstance(v, list):
                     self.data[k] = v
             self.save()

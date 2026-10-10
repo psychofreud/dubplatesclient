@@ -251,7 +251,8 @@ option,optgroup{background:#15161a;color:var(--ink);}
 .lib-empty b{color:var(--ink2);}
 .lib-main{min-width:0;}
 .sv{display:flex;flex-direction:column;gap:12px;}
-.sv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.sv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px 12px;flex-wrap:wrap;}
+.sv-title{flex:1 1 240px;min-width:0;}
 .sv-title h2{font-size:20px;font-weight:700;margin:0;}
 .sv-title small{color:var(--ink3);}
 .sv-transport{display:flex;align-items:center;gap:14px;padding:10px 14px;border-radius:14px;background:var(--panel);border:1px solid var(--line);}
@@ -353,3 +354,21 @@ option,optgroup{background:#15161a;color:var(--ink);}
 @keyframes pop{from{opacity:0;transform:translate(-50%,8px)}}
 
 @media (max-width:900px){.app{grid-template-columns:76px 1fr}.brand img{width:52px}.brand span,.nav span,.device div,.site-link,.ver{display:none}.nav{justify-content:center}.field{grid-template-columns:1fr;gap:8px}}
+
+/* stem view: send to a dubplates.net deck, plugin tag */
+.sv-send{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.sv-site{font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.sv-site::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ink3);opacity:.5;}
+.sv-site.on{color:var(--ink2);}
+.sv-site.on::before{background:oklch(.75 .17 150);opacity:1;box-shadow:0 0 6px oklch(.75 .17 150 / .6);}
+.sv-send .btn.deck:disabled{opacity:.4;}
+.sv-plug{font-size:10px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:5px;background:oklch(.72 .14 62 / .16);color:oklch(.82 .12 62);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;}
+/* plugins */
+.plg-sel{width:100%;}
+.plg-in{display:flex;flex-direction:column;gap:5px;}
+.plg-in small{font-size:12px;line-height:1.4;}
+.plg-none p{margin:0 0 6px;color:var(--ink2);font-size:13px;}
+.modal .err{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.pcard .mc-top b{font-size:15px;}
+.pcard .pmeta{font-size:12px;color:var(--ink3);}
+.pcard .pdir{font-size:11.5px;color:var(--ink3);word-break:break-all;}

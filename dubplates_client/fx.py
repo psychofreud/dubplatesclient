@@ -344,12 +344,21 @@ def stem_paths(folder: Path, meta: dict, stem: str) -> tuple[Path, Path]:
     return f, folder / ".originals" / f.name
 
 
+def base_of(folder: Path, meta: dict, stem: str) -> Path:
+    """What the effects work on: a plugin's result (plugins.py), else the model's stem (the original), else the file."""
+    f, orig = stem_paths(folder, meta, stem)
+    s = next(s for s in meta["stems"] if s["name"].lower() == stem.lower())
+    pl = (s.get("plugin") or {}).get("file")
+    if pl and (folder / pl).is_file():
+        return folder / pl
+    return orig if orig.exists() else f
+
+
 def preview(folder: Path, stem: str, chain: list[dict], start: float, dur: float, out: Path) -> str:
     """The stem from start, dur seconds long, through the chain (from the ORIGINAL stem: the chain replaces, it does
     not add up). Written to out (WAV)."""
     meta = json.loads((folder / "dubplates.json").read_text(encoding="utf-8"))
-    f, orig = stem_paths(folder, meta, stem)
-    x, sr, _ = read(orig if orig.exists() else f, start, dur)
+    x, sr, _ = read(base_of(folder, meta, stem), start, dur)
     y = process(x, sr, chain, others_of(folder, meta, stem, start, dur) if any(m["type"] == "bleed" and m.get("on", True) for m in chain) else None)
     out.parent.mkdir(parents=True, exist_ok=True)
     sf.write(str(out), y.T, sr, subtype="PCM_16")
@@ -365,7 +374,7 @@ def apply(folder: Path, stem: str, chain: list[dict], report=None) -> dict:
     if not orig.exists():
         orig.parent.mkdir(exist_ok=True)
         shutil.copy2(f, orig)
-    x, sr, info = read(orig)
+    x, sr, info = read(base_of(folder, meta, stem))
     others = others_of(folder, meta, stem) if any(m["type"] == "bleed" and m.get("on", True) for m in chain) else None
     y = process(x, sr, chain, others, report)
     tmp = f.with_name(f.stem + ".fx-tmp" + f.suffix)
@@ -387,5 +396,8 @@ def restore(folder: Path, stem: str) -> dict:
     shutil.copy2(orig, f)
     s = next(s for s in meta["stems"] if s["name"].lower() == stem.lower())
     s.pop("fx", None)
+    pl = s.pop("plugin", None)                       # (a plugin's result goes too)
+    if pl and pl.get("file"):
+        (folder / pl["file"]).unlink(missing_ok=True)
     meta_p.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return {"file": str(f)}

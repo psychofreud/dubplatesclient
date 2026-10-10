@@ -9,6 +9,9 @@ dubplates.net site (and local development of it) may use the bridge. Nothing her
                            into the site, or from the site's library. Saved in <app dir>/From dubplates.net)
   GET  /v1/req/<id>        {state, pct, msg, folder, stems, rel, err}
   GET  /v1/req/<id>/stem/<n>  the audio of stem n (when done): the site loads it into the deck
+  GET  /v1/inbox?user=     stem sets the user sent from the client to a deck: [{id, deck, title, stems}] (each once).
+                           A signed-in mixer asks every 2 s; so the client knows that the site is open.
+  GET  /v1/send/<id>/stem/<n>  the audio of stem n of a sent set
                            state: asking | needRoot | queued | running | done | error | cancelled
 """
 from __future__ import annotations
@@ -136,16 +139,44 @@ def serve(api) -> int | None:
             self.wfile.write(data)
 
         def _file(self, f: Path, origin: str | None = None):
-            self.send_response(200)
+            """The file, or the part that a Range header asks for (the <audio> player jumps with it)."""
+            size = f.stat().st_size
+            a, b = 0, size - 1
+            rng = self.headers.get("Range", "")
+            part = rng.startswith("bytes=") and "," not in rng
+            if part:
+                x, _, y = rng[6:].partition("-")
+                try:
+                    if x:
+                        a, b = int(x), (min(int(y), size - 1) if y else size - 1)
+                    else:
+                        a = max(0, size - int(y))
+                except ValueError:
+                    part, a, b = False, 0, size - 1
+                if part and (a > b or a >= size):
+                    self.send_response(416)
+                    self.send_header("Content-Range", f"bytes */{size}")
+                    self.end_headers()
+                    return
+            self.send_response(206 if part else 200)
             self.send_header("Content-Type", mimetypes.guess_type(f.name)[0] or "application/octet-stream")
-            self.send_header("Content-Length", str(f.stat().st_size))
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(b - a + 1))
+            self.send_header("Accept-Ranges", "bytes")
+            if part:
+                self.send_header("Content-Range", f"bytes {a}-{b}/{size}")
+            self.send_header("Cache-Control", "no-cache")
             self.send_header("Access-Control-Allow-Origin", origin or self._origin())
             self.send_header("Vary", "Origin")
             self.end_headers()
-            with open(f, "rb") as fh:
-                while chunk := fh.read(1 << 20):
-                    self.wfile.write(chunk)
+            left = b - a + 1
+            try:
+                with open(f, "rb") as fh:
+                    fh.seek(a)
+                    while left > 0 and (chunk := fh.read(min(left, 1 << 20))):
+                        self.wfile.write(chunk)
+                        left -= len(chunk)
+            except OSError:
+                pass                                     # (the player stopped this request: normal when it jumps)
 
         def do_OPTIONS(self):                            # CORS preflight (+ Chrome's local network access)
             if not self._origin():
@@ -175,7 +206,15 @@ def serve(api) -> int | None:
             if self.path == "/v1/ping":
                 d = getattr(api, "_device", None) or {}
                 return self._send(200, {"app": "dubplates-client", "version": VERSION, "gpu": d.get("name", "")})
+            if u.path == "/v1/inbox":
+                return self._send(200, {"items": api._inbox((parse_qs(u.query).get("user") or [""])[0])})
             m = self.path.split("/")
+            if len(m) == 6 and m[1:3] == ["v1", "send"] and m[4] == "stem":
+                try:
+                    f = api._send_file(int(m[3]), int(m[5]))
+                except ValueError:
+                    f = None
+                return self._file(f) if f else self._send(404, {"error": "No such stem"})
             if len(m) == 6 and m[1:3] == ["v1", "req"] and m[4] == "stem":
                 try:
                     f = reqs.stem_file(int(m[3]), int(m[5]))

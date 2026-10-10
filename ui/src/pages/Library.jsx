@@ -41,7 +41,7 @@ export default function Library({ models, jobs, say, sel, setSel, go }) {
           ))}
         </aside>
         <section className="lib-main">
-          {sel && sel.id ? <StemView key={sel.id} id={sel.id} models={models} jobs={jobs} say={say} />
+          {sel && sel.id ? <StemView key={sel.id} id={sel.id} models={models} jobs={jobs} say={say} go={go} />
             : <div className="lib-pick"><IcFolder size={28} /><span>Pick a stem set on the left.</span></div>}
         </section>
       </div>
