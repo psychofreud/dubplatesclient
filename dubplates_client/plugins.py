@@ -440,10 +440,10 @@ def install_catalog(pid: str, report=None) -> dict:
         raise ValueError("That plugin is not on dubplates.net (any more)")
     if report:
         report(0.02, "Downloading the plugin…")
-    base = f"{SITE}/api/public/client/plugins/{pid}/{pid}-{x['version']}.zip"
-    z = requests.get(base, timeout=120)
+    base = f"{SITE}/api/public/client/plugins/{pid}/{x['version']}"       # (no ".zip" in a URL: the site's
+    z = requests.get(base + "/package", timeout=120)                        #  Nginx closes those as scanners)
     z.raise_for_status()
-    s = requests.get(base + ".sig", timeout=30)
+    s = requests.get(base + "/signature", timeout=30)
     s.raise_for_status()
     if not verify(z.content, s.text):
         raise ValueError("The plugin's signature is not valid: it was not installed")
