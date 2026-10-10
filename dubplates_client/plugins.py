@@ -45,7 +45,9 @@ SITE = "https://dubplates.net"
 # Public keys (Ed25519, base64) of the people who may publish plugins on dubplates.net (tools/plugin_pack.py keygen).
 # A package from the site is installed only when its signature matches one of these: a changed file on the
 # server can not reach this computer.
-TRUST_KEYS: list[str] = []
+TRUST_KEYS: list[str] = [
+    "GhGRor+BBEcxd7FNVG47HWLHbpuGktcNtmCobvfq2os=",          # Anders (dubplates.net admin), 2026-10-10
+]
 
 
 def plugins_dir() -> Path:
