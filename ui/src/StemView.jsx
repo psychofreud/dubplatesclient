@@ -75,8 +75,8 @@ export default function StemView({ id, models, jobs, say, go }) {
   React.useEffect(() => {
     if (!d || !d.media) return;
     const a = audio.current;
-    lanes.forEach(l => { if (!a[l.key]) { const el = new Audio(d.media + encodeURIComponent(l.path)); el.preload = 'auto'; el.preservesPitch = false; a[l.key] = el; } });
-    Object.keys(a).forEach(k => { if (!lanes.find(l => l.key === k)) { a[k].pause(); delete a[k]; } });
+    lanes.forEach(l => { if (!a[l.key]) { const el = new Audio(d.media + encodeURIComponent(l.path) + '&v=' + ((d.ver || {})[l.path] || Date.now())); el.preload = 'auto'; el.preservesPitch = false; a[l.key] = el; } });
+    Object.keys(a).forEach(k => { if (!lanes.find(l => l.key === k)) { a[k].pause(); a[k].src = ''; delete a[k]; } });
   }, [lanes, d]);
   React.useEffect(() => () => { Object.values(audio.current).forEach(el => { el.pause(); el.src = ''; }); }, []);
 
@@ -155,7 +155,8 @@ export default function StemView({ id, models, jobs, say, go }) {
           <small>{m.stems.length} stems · {m.model?.name} · {(m.created || '').slice(0, 16).replace('T', ' ')}</small>
         </div>
         <div className="sv-send" title={site.connected ? 'Load these stems into a deck of the dubplates.net mixer that is open in your browser' : 'Open the dubplates.net mixer (signed in) in your browser on this computer, then send the stems to a deck'}>
-          <span className={'sv-site' + (site.connected ? ' on' : '')}>{site.connected ? 'dubplates.net' : 'dubplates.net not open'}</span>
+          {site.connected ? <span className="sv-site on">dubplates.net</span>
+            : <button className="sv-site link" onClick={() => call('open_url', 'https://dubplates.net/?client')} title="Opens dubplates.net in your browser. Sign in and open the Live mix: then the Deck buttons work.">Open dubplates.net</button>}
           {['A', 'B'].map(D => <button key={D} className={'btn sm deck d' + D} disabled={!site.connected} onClick={() => sendDeck(D)}>Deck {D}</button>)}
         </div>
         <button className="btn sm" onClick={() => call('open_path', d.folder)}><IcFolder size={14} /> Folder</button>

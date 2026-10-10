@@ -135,6 +135,7 @@ function Custom({ models, say, installs }) {
   );
 }
 
+const mb = b => (b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round(b / 1e6) + ' MB');
 // Plugins: folders in <app dir>/plugins with a plugin.json. They work on one stem (Library › a set › ＋ › Plugin).
 function Plugins({ say }) {
   const [p, setP] = React.useState(null);
@@ -159,19 +160,20 @@ function Plugins({ say }) {
       <div className="grid">{p.items.map(x => {
         const inst = x.install, run = inst && !inst.done;
         return (
-          <div key={x.id} className={'mcard pcard' + (!x.problem && x.packages === 'ok' ? ' have' : '')}>
-            <div className="mc-top"><b>{x.name}</b>{x.version && <span className="mpk-n">{x.version}</span>}{!x.problem && x.packages === 'ok' && <span className="ok-dot" title="Ready"><IcCheck size={13} /></span>}</div>
+          <div key={x.id} className={'mcard pcard' + (x.ready ? ' have' : '')}>
+            <div className="mc-top"><b>{x.name}</b>{x.version && <span className="mpk-n">{x.version}</span>}{x.ready && <span className="ok-dot" title="Ready"><IcCheck size={13} /></span>}</div>
             <p>{x.description}</p>
             {x.for?.length > 0 && <span className="pmeta">For: {x.for.slice(0, 3).join(', ')}{x.author ? ` · by ${x.author}` : ''}</span>}
             {x.time && <span className="pmeta">{x.time}</span>}
+            {x.models?.length > 0 && <span className="pmeta">Models: {x.models.map(y => `${y.name || y.file.split('/').pop()}${y.size ? ` (${mb(y.size)})` : ''}${y.have ? ' ✓' : ''}`).join(' · ')}</span>}
             {x.problem && <p className="err"><IcWarn size={14} /> {x.problem}</p>}
             {inst?.err && <p className="err">{inst.err}</p>}
             <span className="pdir mono">{x.dir}</span>
             <div className="mc-foot">
-              <span className="mono dim">{x.problem ? 'Not ready' : x.packages === 'ok' ? 'Ready' : 'Needs packages'}</span>
+              <span className="mono dim">{x.problem ? 'Not ready' : x.ready ? 'Ready' : x.packages !== 'ok' && x.modelsState !== 'ok' ? 'Needs packages + models' : x.packages !== 'ok' ? 'Needs packages' : 'Needs models'}</span>
               <div className="mc-btns">
                 {run ? <div className="dl"><div className="bar"><i style={{ width: Math.max(3, inst.pct) + '%' }} /></div><span className="dl-msg">{inst.msg}</span></div>
-                  : !x.problem && x.packages !== 'ok' && <button className="btn pri sm" onClick={() => install(x.id)}><IcDown size={14} /> Install packages</button>}
+                  : !x.problem && !x.ready && <button className="btn pri sm" onClick={() => install(x.id)}><IcDown size={14} /> Install{(s => s ? ` (${mb(s)})` : '')(x.models.filter(y => !y.have).reduce((a, y) => a + (y.size || 0), 0))}</button>}
                 <button className="btn ghost sm" onClick={() => call('open_path', x.dir)}><IcFolder size={14} /></button>
               </div>
             </div>

@@ -164,7 +164,7 @@ def serve(api) -> int | None:
             self.send_header("Accept-Ranges", "bytes")
             if part:
                 self.send_header("Content-Range", f"bytes {a}-{b}/{size}")
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Access-Control-Allow-Origin", origin or self._origin())
             self.send_header("Vary", "Origin")
             self.end_headers()

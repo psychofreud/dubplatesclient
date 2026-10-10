@@ -81,7 +81,8 @@ function fake() {
     library_add: async () => ({ cancelled: true }), library_remove: ok, stem_work: async () => ({ job: 9 }),
     site_link: async () => ({ connected: !location.search.includes('nosite') }), send_deck: async () => ({ sent: 1 }),
     plugins: async () => ({ dir: 'C:\\Users\\you\\AppData\\Roaming\\Dubplates Client\\plugins', saved: { vocal_repair: { reference: 'D:\\Vocals\\clean studio vocal.flac', ml: true } }, items: [
-      { id: 'vocal_repair', name: 'Vocal repair', version: '1.0', author: 'Anders', for: ['vocals'], packages: location.search.includes('nopkg') ? 'missing' : 'ok', problem: '', dir: 'C:\\Users\\you\\AppData\\Roaming\\Dubplates Client\\plugins\\vocal_repair',
+      { id: 'vocal_repair', name: 'Vocal repair', version: '1.0', author: 'Anders', for: ['vocals'], packages: location.search.includes('nopkg') ? 'missing' : 'ok', problem: '', ready: !location.search.includes('nopkg'), modelsState: location.search.includes('nopkg') ? 'missing' : 'ok',
+        models: [{ file: '.models/dereverb_roformer.onnx', name: 'Mel-Roformer De-Reverb', size: 918257906, have: !location.search.includes('nopkg') }, { file: '.models/dereverb_vr.onnx', name: 'UVR DeEcho-DeReverb', size: 223235642, have: !location.search.includes('nopkg') }], dir: 'C:\\Users\\you\\AppData\\Roaming\\Dubplates Client\\plugins\\vocal_repair',
         description: 'Repairs an AI-made vocal: removes artificial reverb, noise and harsh tone. A clean studio vocal (from any song) is the quality target. Same length and loudness, so it replaces the stem in place.',
         time: 'About 70 s per song on a good GPU (DirectX 12), about 15 times longer on the CPU. Needs about 6.5 GB of GPU memory.',
         inputs: [{ id: 'reference', type: 'audio', label: 'Reference vocal', remember: true, help: 'A clean, dry studio vocal (any song, any words). The plugin learns from it how a good recording sounds.' }],

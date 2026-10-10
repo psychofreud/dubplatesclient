@@ -68,6 +68,7 @@ plugins/
 | `output.ext` | The extension of the file the function writes (`.wav`). The client writes the stem again in the set's format (FLAC / WAV / MP3). |
 | `requirements` | A pip requirements file. `skipPackages`: names in it that the client must not install (optional extras). |
 | `files` | Files that must be there. If one is missing, the client says "copy the whole plugin folder again". |
+| `models` | Files the client downloads on **Install**: `[{"file": ".models/a.onnx", "url": "https://…", "size": 918257906, "sha256": "…", "name": "Mel-Roformer De-Reverb"}]`. Only https. With `size` and `sha256` the client checks the download. The plugin can not run until all are there. |
 | `time` | A short note for the user (speed, memory). |
 
 ## The function

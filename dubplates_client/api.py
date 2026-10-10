@@ -301,6 +301,18 @@ class Api:
     def library_detail(self, lid):
         d = self._lib.detail(lid)
         d["media"] = getattr(self, "_media", None)        # base URL to play files (bridge.py)
+        # a version per file: the player's URL changes when a file changes (effects, plugin, restore). Else the
+        # player mixes parts of the old file from its cache with the new file: that stem is silent after a jump.
+        f, m, ver = Path(d["folder"]), d["meta"], {}
+        rels = [s["file"] for s in m["stems"]] + [p["file"] for s in m["stems"] for p in s.get("parts") or []] + [
+            p["file"] for s in m["stems"] for x in s.get("derived") or [] for p in x.get("stems") or []]
+        for key, p in [(d["folder"] + "/" + r, f / r) for r in rels] + ([(d["sourceFile"], Path(d["sourceFile"]))] if d.get("sourceFile") else []):
+            try:
+                st = p.stat()
+                ver[key] = f"{st.st_mtime_ns:x}{st.st_size:x}"
+            except OSError:
+                pass
+        d["ver"] = ver
         return d
 
     @safe
@@ -474,7 +486,7 @@ class Api:
 
         def work():
             try:
-                plugins.install_deps(pid, lambda f, m: it.update(pct=round(f * 100), msg=m))
+                plugins.install(pid, lambda f, m: it.update(pct=round(f * 100), msg=m))
             except Exception as e:  # noqa: BLE001
                 log.exception("plugin install %s", pid)
                 it.update(err=str(e)[:400], msg="Failed")
@@ -503,8 +515,8 @@ class Api:
         m = plugins.get(pid)
         if m.get("problem"):
             return {"error": m["problem"]}
-        if m["packages"] != "ok":
-            return {"error": "Install the plugin's packages first (Models › Plugins)"}
+        if not m["ready"]:
+            return {"error": "Install the plugin first (Models › Plugins › Install)"}
         inputs, options = dict(inputs or {}), dict(options or {})
         saved = dict(self._cfg["pluginInputs"])
         keep = {i["id"] for i in m.get("inputs") or [] if i.get("remember")} | {o["id"] for o in m.get("options") or []}

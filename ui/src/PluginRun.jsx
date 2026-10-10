@@ -43,7 +43,7 @@ export default function PluginRun({ id, stem, list, say, onDone, go }) {
       {p && <>
         <p className="sub">{p.description}{p.time ? <><br /><span className="dim">{p.time}</span></> : null}</p>
         {p.problem && <p className="err"><IcWarn size={14} /> {p.problem}</p>}
-        {!p.problem && p.packages !== 'ok' && <p className="err"><IcWarn size={14} /> This plugin needs packages first. <button className="btn sm" onClick={() => go('models', 'plugins')}>Install them</button></p>}
+        {!p.problem && p.ready === false && <p className="err"><IcWarn size={14} /> Install this plugin first (packages{p.models?.length ? ' and models' : ''}). <button className="btn sm" onClick={() => go('models', 'plugins')}>Install</button></p>}
         {(p.inputs || []).map(i => (
           <div key={i.id} className="plg-in">
             <label className="lbl">{i.label || i.id}</label>
@@ -61,7 +61,7 @@ export default function PluginRun({ id, stem, list, say, onDone, go }) {
         ))}
         <p className="hint">The result replaces “{stem}”. The stem from the model is kept: <b>FX › Restore original</b> puts it back.</p>
       </>}
-      <div className="modal-btns"><button className="btn pri" disabled={!p || !!p.problem || p.packages !== 'ok' || !!missing} onClick={run}>Run</button><button className="btn ghost" onClick={onDone}>Cancel</button></div>
+      <div className="modal-btns"><button className="btn pri" disabled={!p || !!p.problem || p.ready === false || !!missing} onClick={run}>Run</button><button className="btn ghost" onClick={onDone}>Cancel</button></div>
     </>
   );
 }

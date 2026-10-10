@@ -12,7 +12,9 @@ A plugin is a folder in <app dir>/plugins/<id>/ with a plugin.json (see PLUGINS.
    "callbacks": {"progress": "progress", "log": "log", "cancel": "should_cancel"},   names of the keyword arguments
    "output": {"ext": ".wav"},
    "requirements": "requirements.txt", "skipPackages": ["matplotlib"],
-   "files": [".models/a.onnx"]}                    files that must be there (else: "reinstall the plugin")
+   "files": ["audio_restore.py"],                  files that must be there (else: "copy the plugin again")
+   "models": [{"file": ".models/a.onnx", "url": "https://...", "sha256": "...", "size": 123, "name": "..."}]}
+                                                   downloads ("Install"): the plugin works when all are there
 
 The function runs in its own process (plugin_runner.py): its memory (also on the GPU) is free again after each job,
 and a crash does not stop the app. Packages the app does not have yet go into the plugin's own '.deps' folder, so
@@ -63,11 +65,15 @@ def _manifest(d: Path) -> dict | None:
     mod = entry.split(":")[0]
     if ":" not in entry or not (d / (mod.replace(".", "/") + ".py")).is_file():
         probs.append(f"entry “{entry}”: no such .py file in the folder")
-    missing = [f for f in m.get("files") or [] if not (d / f).is_file()]
+    dl = {x.get("file") for x in m.get("models") or []}
+    missing = [f for f in m.get("files") or [] if f not in dl and not (d / f).is_file()]
     if missing:
         probs.append("missing files: " + ", ".join(missing) + " (copy the whole plugin folder again)")
     m["problem"] = "; ".join(probs)
     m["packages"] = deps_state(m)
+    m["models"] = [{**x, "have": _model_ok(d, x)} for x in m.get("models") or [] if isinstance(x, dict) and x.get("file")]
+    m["modelsState"] = "ok" if all(x["have"] for x in m["models"]) else "missing"
+    m["ready"] = not m["problem"] and m["packages"] == "ok" and m["modelsState"] == "ok"
     return m
 
 
@@ -112,6 +118,70 @@ def _req_lines(m: dict) -> list[str]:
 
 def _key(m: dict) -> str:
     return hashlib.sha1("\n".join(_req_lines(m)).encode()).hexdigest()[:16]
+
+
+def _safe_file(d: Path, rel: str) -> Path:
+    f = (d / rel).resolve()
+    if d.resolve() not in f.parents:
+        raise ValueError(f"Bad file name in plugin.json: {rel}")
+    return f
+
+
+def _model_ok(d: Path, x: dict) -> bool:
+    try:
+        f = _safe_file(d, x["file"])
+    except ValueError:
+        return False
+    return f.is_file() and (not x.get("size") or f.stat().st_size == int(x["size"]))
+
+
+def install_models(pid: str, report=None) -> None:
+    """Downloads the models of a plugin (https only), with a check of size and SHA-256 when plugin.json has them."""
+    import requests
+    m = get(pid)
+    d = Path(m["dir"])
+    todo = [x for x in m["models"] if not x["have"]]
+    total = sum(int(x.get("size") or 0) for x in todo) or 1
+    done = 0
+    for x in todo:
+        url = str(x.get("url", ""))
+        if not url.startswith("https://"):
+            raise ValueError(f"{x['file']}: no https download link in plugin.json")
+        f = _safe_file(d, x["file"])
+        f.parent.mkdir(parents=True, exist_ok=True)
+        part = f.with_name(f.name + ".part")
+        h = hashlib.sha256()
+        name = x.get("name") or f.name
+        with requests.get(url, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            size = int(x.get("size") or r.headers.get("Content-Length") or 0)
+            got = 0
+            with open(part, "wb") as fh:
+                for chunk in r.iter_content(1 << 20):
+                    fh.write(chunk)
+                    h.update(chunk)
+                    got += len(chunk)
+                    if report:
+                        report(min(0.99, (done + got) / max(total, done + got)), f"{name}: {got >> 20} of {size >> 20} MB" if size else f"{name}: {got >> 20} MB")
+        if x.get("size") and got != int(x["size"]):
+            part.unlink(missing_ok=True)
+            raise ValueError(f"{name}: the download has the wrong size")
+        if x.get("sha256") and h.hexdigest().lower() != str(x["sha256"]).lower():
+            part.unlink(missing_ok=True)
+            raise ValueError(f"{name}: the download is not the expected file (SHA-256)")
+        part.replace(f)
+        done += got
+
+
+def install(pid: str, report=None) -> None:
+    """Install = the packages, then the models (each part only when it is missing)."""
+    m = get(pid)
+    if m["packages"] != "ok":
+        install_deps(pid, (lambda f, s: report(f * 0.2, s)) if report and m["models"] else report)
+    if m["modelsState"] != "ok":
+        install_models(pid, (lambda f, s: report(0.2 + f * 0.8, s)) if report else None)
+    if report:
+        report(1.0, "Installed")
 
 
 def deps_state(m: dict) -> str:
@@ -190,8 +260,8 @@ def run(m: dict, stem_file: Path, out_file: Path, inputs: dict, options: dict, r
     Returns {"warnings": [...], "log": [...]}. Raises PluginError (its message is for the user)."""
     if m.get("problem"):
         raise PluginError(m["problem"])
-    if deps_state(m) != "ok":
-        raise PluginError("Install the plugin's packages first (Models › Plugins)")
+    if not m.get("ready", True):
+        raise PluginError("Install the plugin first (Models › Plugins › Install)")
     vals = {"stem": str(stem_file), "output": str(out_file)}
     for i in m.get("inputs") or []:
         v = (inputs or {}).get(i["id"], "")
